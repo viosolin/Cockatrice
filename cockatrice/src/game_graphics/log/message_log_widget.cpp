@@ -252,6 +252,7 @@ void MessageLogWidget::logCreateArrow(PlayerLogic *player,
 
 void MessageLogWidget::logCreateToken(PlayerLogic *player, QString cardName, QString pt, bool faceDown)
 {
+    soundEngine->playSound("create_token");
     if (faceDown) {
         appendHtmlServerMessage(
             tr("%1 creates a face down token.").arg(sanitizeHtml(player->getPlayerInfo()->getName())));
@@ -424,6 +425,7 @@ void MessageLogWidget::logDumpZone(PlayerLogic *player, CardZoneLogic *zone, int
 
 void MessageLogWidget::logFlipCard(PlayerLogic *player, QString cardName, bool faceDown)
 {
+    soundEngine->playSound("flip_card");
     if (faceDown) {
         appendHtmlServerMessage(
             tr("%1 turns %2 face-down.").arg(sanitizeHtml(player->getPlayerInfo()->getName())).arg(cardLink(cardName)));

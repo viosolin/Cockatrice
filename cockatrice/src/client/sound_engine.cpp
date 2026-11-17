@@ -146,7 +146,8 @@ void SoundEngine::themeChangedSlot()
         "untap_step", "upkeep_step", "draw_step", "main_1", "start_combat", "attack_step", "block_step", "damage_step",
         "end_combat", "main_2", "end_step",
         // Game Actions
-        "draw_card", "play_card", "tap_card", "untap_card", "shuffle", "roll_dice", "life_change",
+        "draw_card", "play_card", "tap_card", "untap_card", "shuffle", "roll_dice", "life_change", "flip_card",
+        "create_token",
         // Player
         "player_join", "player_leave", "player_disconnect", "player_reconnect", "player_concede",
         // Spectator
