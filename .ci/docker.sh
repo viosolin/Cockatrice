@@ -175,6 +175,17 @@ function RUN ()
       args+=(--mount "type=bind,source=$GITHUB_OUTPUT,target=/gh_output")
       args+=(--env "GITHUB_OUTPUT=/gh_output")
     fi
+    # The container does not inherit host env vars: without this, WITH_CRASH_REPORTING=ON set in
+    # the workflow never reaches compile.sh inside the container, so the Linux packages silently
+    # build with crash reporting OFF while the libcurl packages in the Dockerfiles go unused.
+    if [[ ${WITH_CRASH_REPORTING:-} ]]; then
+      args+=(--env "WITH_CRASH_REPORTING=${WITH_CRASH_REPORTING}")
+    fi
+    # Same reason: the DWARF level reaches compile.sh only if it is handed to the container,
+    # and without it CI would cache objects twice the size its bounds were measured for.
+    if [[ ${COCKATRICE_DEBUG_INFO_LEVEL:-} ]]; then
+      args+=(--env "COCKATRICE_DEBUG_INFO_LEVEL=${COCKATRICE_DEBUG_INFO_LEVEL}")
+    fi
     # shellcheck disable=2086
     docker run "${args[@]}" $RUN_ARGS "$IMAGE_NAME" bash "$BUILD_SCRIPT" $RUN_OPTS "$@"
     return $?

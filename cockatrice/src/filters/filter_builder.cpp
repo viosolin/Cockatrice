@@ -1,6 +1,6 @@
 #include "filter_builder.h"
 
-#include "../interface/pixel_map_generator.h"
+#include "../interface/theme_icon.h"
 #include "../interface/widgets/utility/custom_line_edit.h"
 
 #include <QComboBox>
@@ -13,6 +13,7 @@
 #include <QVariant>
 #include <QtGlobal>
 #include <libcockatrice/filters/filter_card.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <stddef.h>
 
 FilterBuilder::FilterBuilder(QWidget *parent) : QWidget(parent)
@@ -29,7 +30,8 @@ FilterBuilder::FilterBuilder(QWidget *parent) : QWidget(parent)
         typeCombo->addItem(CardFilter::typeName(static_cast<CardFilter::Type>(i)), QVariant(i));
     }
 
-    QPushButton *ok = new QPushButton(themePixmap(QStringLiteral("icons/increment")), QString());
+    QPushButton *ok = new QPushButton(
+        loadThemedIcon(QStringLiteral("icons/increment"), AppColor::Positive, IconStyle::Sticker), QString());
     ok->setObjectName("ok");
     ok->setMaximumSize(20, 20);
 
@@ -39,9 +41,8 @@ FilterBuilder::FilterBuilder(QWidget *parent) : QWidget(parent)
     edit->setClearButtonEnabled(true);
     edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-    QGridLayout *layout = new QGridLayout;
+    QGridLayout *layout = QtUtils::makeLayout<QGridLayout>();
     layout->setObjectName("layout");
-    layout->setContentsMargins(0, 0, 0, 0);
 
     layout->addWidget(typeCombo, 0, 0, 1, 2);
     layout->addWidget(filterCombo, 0, 2, 1, 2);
@@ -53,7 +54,7 @@ FilterBuilder::FilterBuilder(QWidget *parent) : QWidget(parent)
     connect(filterCombo, qOverload<int>(&QComboBox::activated), edit, [this](int) { setFocus(); });
     connect(edit, &LineEditUnfocusable::returnPressed, this, &FilterBuilder::emit_add);
     connect(ok, &QPushButton::released, this, &FilterBuilder::emit_add);
-    fltr = NULL;
+    fltr = nullptr;
 }
 
 FilterBuilder::~FilterBuilder()

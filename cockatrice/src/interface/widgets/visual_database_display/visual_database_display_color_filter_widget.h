@@ -10,8 +10,9 @@
 #include <QByteArray>
 #include <QChar>
 #include <QList>
-#include <QMetaType>
 #include <QWidget>
+#include <libcockatrice/filters/filter_mode.h>
+#include <libcockatrice/utility/debouncer.h>
 #include <qtmetamacros.h>
 
 class FilterTreeModel;
@@ -37,15 +38,6 @@ private:
     int circleDiameter;
 };
 
-enum class FilterMode
-{
-    ExactMatch,    // Only selected colors are included, all others are excluded.
-    Includes,      // Include selected colors (OR condition).
-    IncludeExclude // Include selected colors (OR) and exclude unselected colors (AND NOT).
-};
-
-Q_DECLARE_METATYPE(FilterMode)
-
 class VisualDatabaseDisplayColorFilterWidget : public QWidget
 {
     Q_OBJECT
@@ -53,11 +45,13 @@ class VisualDatabaseDisplayColorFilterWidget : public QWidget
 public:
     explicit VisualDatabaseDisplayColorFilterWidget(QWidget *parent, FilterTreeModel *filterModel);
     void retranslateUi();
+    void setFilterMode(FilterMode filterMode);
 
 signals:
     void filterModeChanged(FilterMode filterMode);
 
 private slots:
+    void addCustomFilterModeItem();
     void handleColorToggled(QChar color, bool active);
     void addFilter(QChar color);
     void removeFilter(QChar color);
@@ -71,6 +65,7 @@ private:
     QHBoxLayout *layout;
     QComboBox *modeComboBox;
     FilterMode currentMode = FilterMode::Includes; // Default mode
+    QtUtils::Debouncer syncDebouncer{100};
 };
 
 #endif // VISUAL_DATABASE_DISPLAY_COLOR_FILTER_WIDGET_H

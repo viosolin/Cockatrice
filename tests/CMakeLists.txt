@@ -171,12 +171,58 @@ endfunction()
 
 # --- Unit tests ------------------------------------------------------------------
 
+cockatrice_add_test(NAME image_request_queue_test SOURCES image_request_queue_test.cpp)
+cockatrice_add_test(NAME image_redirect_chain_test SOURCES image_redirect_chain_test.cpp)
 cockatrice_add_test(NAME expression_test SOURCES expression_test.cpp LIBS libcockatrice_utility)
 cockatrice_add_test(NAME clamped_arithmetic_test SOURCES clamped_arithmetic_test.cpp LIBS libcockatrice_utility)
 cockatrice_add_test(NAME test_age_formatting SOURCES test_age_formatting.cpp LIBS libcockatrice_utility)
+cockatrice_add_test(NAME user_data_backup_test SOURCES user_data_backup_test.cpp LIBS libcockatrice_utility)
 cockatrice_add_test(NAME password_hash_test SOURCES password_hash_test.cpp LIBS libcockatrice_utility)
 cockatrice_add_test(NAME report_categories_test SOURCES report_categories_test.cpp LIBS libcockatrice_utility)
+cockatrice_add_test(NAME svg_recolor_test SOURCES svg_recolor_test.cpp LIBS libcockatrice_utility)
 cockatrice_add_test(NAME warning_categories_test SOURCES warning_categories_test.cpp LIBS libcockatrice_utility)
+cockatrice_add_test(
+  NAME
+  user_games_model_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/widgets/server/user/user_games_model.cpp
+  user_games_model_test.cpp
+  LIBS
+  libcockatrice_network_client_abstract
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/cockatrice/src
+  ${CMAKE_SOURCE_DIR}/libcockatrice_network
+)
+cockatrice_add_test(
+  NAME
+  spoiler_file_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/cockatrice/src/client/network/update/card_spoiler/spoiler_file.cpp
+  spoiler_file_test.cpp
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/cockatrice/src
+)
+# The installer's holder probe is Windows-only, but the wording it produces and the
+# question which programs are the payload's own are plain C++ and are what a stuck user
+# has to act on, so they are tested everywhere.
+cockatrice_add_test(
+  NAME
+  holder_line_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/tools/installer-holder-probe/holder_line.cpp
+  holder_line_test.cpp
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/tools/installer-holder-probe
+)
+cockatrice_add_test(
+  NAME
+  payload_paths_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/tools/installer-holder-probe/payload_paths.cpp
+  payload_paths_test.cpp
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/tools/installer-holder-probe
+)
 cockatrice_add_test(
   NAME
   playmat_resolver_test
@@ -185,6 +231,18 @@ cockatrice_add_test(
   LIBS
   libcockatrice_deck_list
   libcockatrice_utility
+)
+cockatrice_add_test(
+  NAME
+  card_art_crop_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/widgets/cards/card_art_utils.cpp
+  ${VERSION_STRING_CPP}
+  card_art_crop_test.cpp
+  LIBS
+  libcockatrice_card
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/cockatrice/src
 )
 cockatrice_add_test(
   NAME
@@ -198,8 +256,53 @@ cockatrice_add_test(
 )
 cockatrice_add_test(
   NAME
+  rate_limiter_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/servatrice/src/ratelimiter.cpp
+  rate_limiter_test.cpp
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/servatrice/src
+  LABELS
+  server
+)
+cockatrice_add_test(
+  NAME
+  forwarded_address_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/servatrice/src/forwarded_address.cpp
+  forwarded_address_test.cpp
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/servatrice/src
+  LABELS
+  server
+)
+cockatrice_add_test(
+  NAME
+  trusted_sources_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/servatrice/src/trusted_sources.cpp
+  trusted_sources_test.cpp
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/servatrice/src
+  LABELS
+  server
+)
+cockatrice_add_test(
+  NAME
+  server_logger_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/servatrice/src/server_logger.cpp
+  server_logger_test.cpp
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/servatrice/src
+  LABELS
+  server
+)
+cockatrice_add_test(
+  NAME
   server_card_counter_test
   SOURCES
+  ${VERSION_STRING_CPP}
   server_card_counter_test.cpp
   LIBS
   libcockatrice_network
@@ -210,6 +313,7 @@ cockatrice_add_test(
   NAME
   server_dump_zone_test
   SOURCES
+  ${VERSION_STRING_CPP}
   server_dump_zone_test.cpp
   LIBS
   libcockatrice_rng
@@ -221,6 +325,7 @@ cockatrice_add_test(
   NAME
   server_counter_test
   SOURCES
+  ${VERSION_STRING_CPP}
   server_counter_test.cpp
   LIBS
   libcockatrice_network
@@ -232,6 +337,7 @@ cockatrice_add_test(
   server_developer_role_test
   NO_SANITIZE
   SOURCES
+  ${VERSION_STRING_CPP}
   server_developer_role_test.cpp
   LIBS
   libcockatrice_network
@@ -244,10 +350,23 @@ cockatrice_add_test(
   server_moderator_role_test
   NO_SANITIZE
   SOURCES
+  ${VERSION_STRING_CPP}
   server_moderator_role_test.cpp
   LIBS
   libcockatrice_network
   libcockatrice_rng
+  LABELS
+  server
+)
+cockatrice_add_test(
+  NAME
+  random_reveal_test
+  SOURCES
+  random_reveal_test.cpp
+  LIBS
+  libcockatrice_network_server_remote
+  libcockatrice_rng
+  libcockatrice_server_dev
   LABELS
   server
 )
@@ -259,6 +378,98 @@ cockatrice_add_test(
   LIBS
   libcockatrice_network_server_remote
   libcockatrice_rng
+  libcockatrice_server_dev
+  LABELS
+  server
+)
+cockatrice_add_test(
+  NAME
+  server_forced_password_change_test
+  SOURCES
+  server_forced_password_change_test.cpp
+  LIBS
+  libcockatrice_network_server_remote
+  libcockatrice_rng
+  libcockatrice_server_dev
+  LABELS
+  server
+)
+if(WITH_SERVER)
+  # The only test that starts a separately scheduled server process. servatrice-dev is built by the
+  # servatrice subdirectory, which exists only when WITH_SERVER is on; the binary path is baked in
+  # because CTest runs the test from its own working directory.
+  cockatrice_add_test(
+    NAME
+    server_dev_smoke_test
+    SOURCES
+    ${VERSION_STRING_CPP}
+    server_dev_smoke_test.cpp
+    LIBS
+    libcockatrice_network_client_remote
+    LABELS
+    server
+    DEFINITIONS
+    "SERVATRICE_DEV_BINARY=\"$<TARGET_FILE:servatrice-dev>\""
+  )
+  add_dependencies(server_dev_smoke_test servatrice-dev)
+endif()
+cockatrice_add_test(
+  NAME
+  client_login_status_test
+  SOURCES
+  ${VERSION_STRING_CPP}
+  client_login_status_test.cpp
+  LIBS
+  libcockatrice_network_client_remote
+  LABELS
+  ci
+)
+# The local game runs one client and one server in the same process.
+# Either of them can be destroyed first; the survivor has to stay usable.
+cockatrice_add_test(
+  NAME
+  local_client_lifetime_test
+  SOURCES
+  ${VERSION_STRING_CPP}
+  local_client_lifetime_test.cpp
+  LIBS
+  libcockatrice_network
+  LABELS
+  ci
+)
+cockatrice_add_test(
+  NAME
+  server_room_channels_test
+  SOURCES
+  server_room_channels_test.cpp
+  LIBS
+  libcockatrice_network_server_remote
+  libcockatrice_rng
+  libcockatrice_server_dev
+  LABELS
+  server
+)
+cockatrice_add_test(
+  NAME
+  servatrice_in_memory_database_test
+  SOURCES
+  servatrice_in_memory_database_test.cpp
+  LIBS
+  libcockatrice_server_dev
+  LABELS
+  server
+)
+
+cockatrice_add_test(
+  NAME
+  private_chat_paging_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/servatrice/src/private_chat_paging.cpp
+  private_chat_paging_test.cpp
+  LIBS
+  libcockatrice_protocol
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/servatrice/src
   LABELS
   server
 )
@@ -266,6 +477,7 @@ cockatrice_add_test(
   NAME
   latency_tracker_test
   SOURCES
+  ${VERSION_STRING_CPP}
   latency_tracker_test.cpp
   LIBS
   libcockatrice_network
@@ -303,17 +515,35 @@ cockatrice_add_test(
 )
 cockatrice_add_test(
   NAME
-  loader_local_matching_test
+  font_config_test
   SOURCES
-  ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/card_picture_loader/card_picture_loader_local.cpp
-  ${CMAKE_SOURCE_DIR}/cockatrice/src/client/settings/cache_settings.cpp
-  ${CMAKE_SOURCE_DIR}/cockatrice/src/client/settings/card_counter_settings.cpp
-  ${CMAKE_SOURCE_DIR}/cockatrice/src/client/settings/shortcuts_settings.cpp
-  ${CMAKE_SOURCE_DIR}/cockatrice/src/client/network/update/client/release_channel.cpp
-  ${VERSION_STRING_CPP}
-  loader_local_matching_test.cpp
+  ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/theme_config.cpp
+  font_config_test.cpp
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/cockatrice/src
+)
+cockatrice_add_test(
+  NAME
+  game_creation_options_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/widgets/game_hosting/game_creation_options.cpp
+  game_creation_options_test.cpp
   LIBS
-  libcockatrice_settings
+  libcockatrice_interfaces
+  libcockatrice_protocol
+  INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/cockatrice/src
+)
+cockatrice_add_test(
+  NAME
+  create_game_form_widget_test
+  SOURCES
+  ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/widgets/game_hosting/create_game_form_widget.cpp
+  ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/widgets/game_hosting/game_creation_options.cpp
+  create_game_form_widget_test.cpp
+  LIBS
+  libcockatrice_interfaces
+  libcockatrice_protocol
   INCLUDE_DIRS
   ${CMAKE_SOURCE_DIR}/cockatrice/src
 )
@@ -349,6 +579,7 @@ if(TARGET Qt6::lrelease)
     libcockatrice_utility
     DEFINITIONS
     TRANSLATION_LOADER_TEST_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+    COCKATRICE_TRANSLATIONS_DIR="${CMAKE_SOURCE_DIR}/cockatrice/translations"
   )
   add_dependencies(translation_loader_test translation_loader_test_qm)
 
@@ -369,6 +600,19 @@ endif()
 if(WITH_CLIENT)
   cockatrice_add_test(
     NAME
+    moxfield_signature_spells_test
+    SOURCES
+    ${VERSION_STRING_CPP}
+    ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/deck_loader/card_node_function.cpp
+    moxfield_signature_spells_test.cpp
+    LIBS
+    libcockatrice_card
+    libcockatrice_deck_list
+    INCLUDE_DIRS
+    ${CMAKE_SOURCE_DIR}/cockatrice/src
+  )
+  cockatrice_add_test(
+    NAME
     single_instance_manager_test
     SOURCES
     ${CMAKE_SOURCE_DIR}/cockatrice/src/single_instance_manager.cpp
@@ -377,16 +621,54 @@ if(WITH_CLIENT)
     ${CMAKE_SOURCE_DIR}/cockatrice/src
     ${CMAKE_SOURCE_DIR}/libcockatrice_utility
   )
+  # The installer's probe and the client build the socket name independently, and the
+  # command they exchange is spelled in both places. Compiling both ends into one test is
+  # what keeps them from drifting apart unnoticed: a mismatch would leave the installer
+  # unable to close an instance whose window it cannot reach.
+  cockatrice_add_test(
+    NAME
+    installer_close_server_test
+    SOURCES
+    ${CMAKE_SOURCE_DIR}/cockatrice/src/installer_close_server.cpp
+    ${CMAKE_SOURCE_DIR}/tools/installer-holder-probe/installer_close_name.cpp
+    installer_close_server_test.cpp
+    INCLUDE_DIRS
+    ${CMAKE_SOURCE_DIR}/cockatrice/src
+    ${CMAKE_SOURCE_DIR}/libcockatrice_utility
+    ${CMAKE_SOURCE_DIR}/tools/installer-holder-probe
+  )
+  # CrashReporter is client code; DEFINITIONS keeps the test hermetic by compiling the
+  # no-op path (no sentry-native headers needed) regardless of WITH_CRASH_REPORTING.
+  cockatrice_add_test(
+    NAME
+    crash_reporter_test
+    SOURCES
+    ${CMAKE_SOURCE_DIR}/cockatrice/src/client/crash/crash_reporter.cpp
+    crash_reporter_test.cpp
+    LIBS
+    libcockatrice_settings
+    INCLUDE_DIRS
+    ${CMAKE_SOURCE_DIR}/cockatrice/src
+    DEFINITIONS
+    COCKATRICE_WITH_CRASH_REPORTING=0
+  )
 endif()
 
 add_subdirectory(card_zone_algorithms)
 add_subdirectory(carddatabase)
 add_subdirectory(deck_list_model)
 add_subdirectory(deck_list_zones)
+add_subdirectory(icon_assets)
 add_subdirectory(loading_from_clipboard)
+add_subdirectory(model_contract)
 add_subdirectory(movecard_tests)
 add_subdirectory(oracle)
 add_subdirectory(settings)
+
+# libcockatrice_game only exists when the client is built.
+if(WITH_CLIENT)
+  add_subdirectory(game)
+endif()
 
 # theme_migration_test compiles client sources, whose headers are only reachable from a client build.
 if(WITH_CLIENT)
@@ -397,4 +679,47 @@ endif()
 # a client/UI-capable target is being built.
 if(WITH_ORACLE OR WITH_CLIENT)
   add_subdirectory(picture_loader_benchmark)
+endif()
+
+# loader_local_matching_test and deck_state_manager_test links libcockatrice_settings,
+# which only exists when a client/UI-capable target is being built.
+if(WITH_ORACLE OR WITH_CLIENT)
+  set(SETTINGS_SOURCES
+      ${CMAKE_SOURCE_DIR}/cockatrice/src/client/network/update/client/release_channel.cpp
+      ${CMAKE_SOURCE_DIR}/cockatrice/src/client/settings/cache_settings.cpp
+      ${CMAKE_SOURCE_DIR}/cockatrice/src/client/settings/card_counter_settings.cpp
+      ${CMAKE_SOURCE_DIR}/cockatrice/src/client/settings/shortcuts_settings.cpp
+      ${VERSION_STRING_CPP}
+  )
+  set(SETTINGS_LIBS libcockatrice_network libcockatrice_settings)
+  set(SETTINGS_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/cockatrice/src)
+
+  cockatrice_add_test(
+    NAME
+    loader_local_matching_test
+    SOURCES
+    ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/card_picture_loader/card_picture_loader_local.cpp
+    ${SETTINGS_SOURCES}
+    loader_local_matching_test.cpp
+    LIBS
+    ${SETTINGS_LIBS}
+    INCLUDE_DIRS
+    ${SETTINGS_INCLUDE_DIRS}
+  )
+  cockatrice_add_test(
+    NAME
+    deck_state_manager_test
+    SOURCES
+    ${CMAKE_SOURCE_DIR}/cockatrice/src/interface/widgets/deck_editor/deck_state_manager.cpp
+    ${SETTINGS_SOURCES}
+    deck_state_manager_test.cpp
+    LIBS
+    libcockatrice_card
+    libcockatrice_deck_list
+    libcockatrice_models
+    libcockatrice_utility
+    ${SETTINGS_LIBS}
+    INCLUDE_DIRS
+    ${SETTINGS_INCLUDE_DIRS}
+  )
 endif()

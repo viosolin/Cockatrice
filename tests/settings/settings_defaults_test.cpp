@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QHash>
 #include <QList>
+#include <QSettings>
 #include <QString>
 #include <QStringList>
 #include <QTemporaryDir>
@@ -285,6 +286,32 @@ TEST_F(SettingsDefaultsTest, Chat_HighlightColor_Default)
     ASSERT_EQ(s.getChatHighlightColor(), QString("A6120D"));
 }
 
+TEST_F(SettingsDefaultsTest, Chat_ChannelUnreadColor_Default)
+{
+    ChatSettings s(settingsPath, nullptr);
+    ASSERT_EQ(s.getChannelUnreadColor(), QString("1A7B00"));
+}
+
+TEST_F(SettingsDefaultsTest, Chat_ChannelUnreadColor_SetAndGet)
+{
+    ChatSettings s(settingsPath, nullptr);
+    s.setChannelUnreadColor(QString("0000FF"));
+    ASSERT_EQ(s.getChannelUnreadColor(), QString("0000FF"));
+}
+
+TEST_F(SettingsDefaultsTest, Chat_ChannelMentionColor_Default)
+{
+    ChatSettings s(settingsPath, nullptr);
+    ASSERT_EQ(s.getChannelMentionColor(), QString("A6120D"));
+}
+
+TEST_F(SettingsDefaultsTest, Chat_ChannelMentionColor_SetAndGet)
+{
+    ChatSettings s(settingsPath, nullptr);
+    s.setChannelMentionColor(QString("FF0000"));
+    ASSERT_EQ(s.getChannelMentionColor(), QString("FF0000"));
+}
+
 TEST_F(SettingsDefaultsTest, Chat_MentionForeground_Default)
 {
     ChatSettings s(settingsPath, nullptr);
@@ -339,6 +366,32 @@ TEST_F(SettingsDefaultsTest, Personal_ShowTipsOnStartup_Default)
 {
     PersonalSettings s(settingsPath, nullptr);
     ASSERT_EQ(s.getShowTipsOnStartup(), true);
+}
+
+TEST_F(SettingsDefaultsTest, Personal_CrashReportingMode_Default)
+{
+    PersonalSettings s(settingsPath, nullptr);
+    ASSERT_EQ(s.getCrashReportingMode(), PersonalSettings::CrashReportingMode::Ask);
+}
+
+TEST_F(SettingsDefaultsTest, Personal_CrashReportingMode_SetAndGet)
+{
+    PersonalSettings s(settingsPath, nullptr);
+    s.setCrashReportingMode(PersonalSettings::CrashReportingMode::AlwaysSend);
+    ASSERT_EQ(s.getCrashReportingMode(), PersonalSettings::CrashReportingMode::AlwaysSend);
+    s.setCrashReportingMode(PersonalSettings::CrashReportingMode::NeverSend);
+    ASSERT_EQ(s.getCrashReportingMode(), PersonalSettings::CrashReportingMode::NeverSend);
+    s.setCrashReportingMode(PersonalSettings::CrashReportingMode::Ask);
+    ASSERT_EQ(s.getCrashReportingMode(), PersonalSettings::CrashReportingMode::Ask);
+}
+
+TEST_F(SettingsDefaultsTest, Personal_CrashReportingMode_ClampsCorruptValue)
+{
+    QSettings raw(settingsPath + "personal.ini", QSettings::IniFormat);
+    raw.setValue("personal/crashReportingMode", 99);
+    raw.sync();
+    PersonalSettings s(settingsPath, nullptr);
+    ASSERT_EQ(s.getCrashReportingMode(), PersonalSettings::CrashReportingMode::Ask);
 }
 
 // --- DownloadSettings ---
@@ -406,19 +459,6 @@ TEST_F(SettingsDefaultsTest, Appearance_StyleUserList_Default)
 {
     AppearanceSettings s(settingsPath, nullptr);
     ASSERT_EQ(s.getStyleUserList(), true);
-}
-
-TEST_F(SettingsDefaultsTest, Appearance_MaxFontSize_Default)
-{
-    AppearanceSettings s(settingsPath, nullptr);
-    ASSERT_EQ(s.getMaxFontSize(), 12);
-}
-
-TEST_F(SettingsDefaultsTest, Appearance_MaxFontSize_SetAndGet)
-{
-    AppearanceSettings s(settingsPath, nullptr);
-    s.setMaxFontSize(14);
-    ASSERT_EQ(s.getMaxFontSize(), 14);
 }
 
 TEST_F(SettingsDefaultsTest, Appearance_HomeTabBackgroundSource_Default)
@@ -628,6 +668,75 @@ TEST_F(SettingsDefaultsTest, CardsDisplay_ArrowDrawAnimation_Default)
 {
     CardsDisplaySettings s(settingsPath, nullptr);
     ASSERT_EQ(s.getArrowDrawAnimation(), true);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverPanelTrigger_Default)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    ASSERT_EQ(s.getHoverPanelTrigger(), CardsDisplaySettings::HoverPanelTriggerHover);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverPanelTrigger_SetAndGet)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    s.setHoverPanelTrigger(2);
+    ASSERT_EQ(s.getHoverPanelTrigger(), 2);
+    s.setHoverPanelTrigger(0);
+    ASSERT_EQ(s.getHoverPanelTrigger(), 0);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverZoomTrigger_Default)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    ASSERT_EQ(s.getHoverZoomTrigger(), CardsDisplaySettings::HoverPanelTriggerHover);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverZoomTrigger_SetAndGet)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    s.setHoverZoomTrigger(1);
+    ASSERT_EQ(s.getHoverZoomTrigger(), 1);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverPanelDoubleConfirm_Default)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    ASSERT_EQ(s.getHoverPanelDoubleConfirm(), false);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverPanelDoubleConfirm_SetAndGet)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    s.setHoverPanelDoubleConfirm(true);
+    ASSERT_EQ(s.getHoverPanelDoubleConfirm(), true);
+    s.setHoverPanelDoubleConfirm(false);
+    ASSERT_EQ(s.getHoverPanelDoubleConfirm(), false);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverZoomDelayMs_Default)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    ASSERT_EQ(s.getHoverZoomDelayMs(), 400);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverZoomDelayMs_SetAndGet)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    s.setHoverZoomDelayMs(750);
+    ASSERT_EQ(s.getHoverZoomDelayMs(), 750);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverPanelDelayMs_Default)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    ASSERT_EQ(s.getHoverPanelDelayMs(), 200);
+}
+
+TEST_F(SettingsDefaultsTest, CardsDisplay_HoverPanelDelayMs_SetAndGet)
+{
+    CardsDisplaySettings s(settingsPath, nullptr);
+    s.setHoverPanelDelayMs(0);
+    ASSERT_EQ(s.getHoverPanelDelayMs(), 0);
 }
 
 TEST_F(SettingsDefaultsTest, CardsDisplay_CardLang_Default)

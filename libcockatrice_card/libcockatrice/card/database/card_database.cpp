@@ -53,13 +53,26 @@ CardDatabase::~CardDatabase()
     clear();
 }
 
+void CardDatabase::detachSetMembership()
+{
+    for (const auto &set : sets) {
+        if (set) {
+            set->clear();
+        }
+    }
+}
+
 void CardDatabase::clear()
 {
     QMutexLocker locker(clearDatabaseMutex);
 
+    // The sets hold strong card references, so empty them before dropping the cards: this breaks the
+    // CardInfo <-> CardSet cycle and spares the per-card detach over the whole database.
+    detachSetMembership();
+
     for (const auto &card : cards.values()) {
         if (card) {
-            removeCard(card);
+            unindexCard(card);
         }
     }
 
@@ -112,12 +125,9 @@ void CardDatabase::refreshCachedReverseRelatedCards(CardNameMap &cardMap)
     }
 
     for (const auto &card : cardMap) {
-        for (auto *rel : card->getReverseRelatedCards()) {
-            if (auto target = cardMap.value(rel->getName())) {
-                auto *newRel = new CardRelation(card->getName(), rel->getAttachType(), rel->getIsCreateAllExclusion(),
-                                                rel->getIsVariable(), rel->getDefaultCount(), rel->getIsPersistent(),
-                                                rel->getIsFaceDown());
-                target->addReverseRelatedCards2Me(newRel);
+        for (auto rel : card->getReverseRelatedCards()) {
+            if (auto target = cardMap.value(rel.name)) {
+                target->addReverseRelatedCards2Me(rel.copyWithName(card->getName()));
             }
         }
     }
@@ -156,18 +166,23 @@ void CardDatabase::removeCard(const CardInfoPtr &card)
         return;
     }
 
-    for (auto *cardRelation : card->getRelatedCards()) {
-        cardRelation->deleteLater();
+    // The set holds a strong reference back to the card, so detach it: leaving it there keeps both
+    // objects alive after the database drops the card. newInstance() appends through the first
+    // printing of every set, so detaching through that same printing mirrors the append.
+    for (const auto &printings : card->getSets()) {
+        if (printings.isEmpty()) {
+            continue;
+        }
+        if (const CardSetPtr set = printings.first().getSet()) {
+            set->removeAll(card);
+        }
     }
 
-    for (auto *cardRelation : card->getReverseRelatedCards()) {
-        cardRelation->deleteLater();
-    }
+    unindexCard(card);
+}
 
-    for (auto *cardRelation : card->getReverseRelatedCards2Me()) {
-        cardRelation->deleteLater();
-    }
-
+void CardDatabase::unindexCard(const CardInfoPtr &card)
+{
     QMutexLocker locker(removeCardMutex);
     cards.remove(card->getName());
     simpleNameCards.remove(card->getSimpleName());
@@ -261,17 +276,9 @@ void CardDatabase::addFormat(const FormatRulesPtr &format)
 
 void CardDatabase::swapInDatabaseData(CardDatabaseData data)
 {
-    for (const auto &card : cards) {
-        for (auto *rel : card->getRelatedCards()) {
-            rel->deleteLater();
-        }
-        for (auto *rel : card->getReverseRelatedCards()) {
-            rel->deleteLater();
-        }
-        for (auto *rel : card->getReverseRelatedCards2Me()) {
-            rel->deleteLater();
-        }
-    }
+    // Break the CardSet <-> CardInfo cycle before replacing the containers, otherwise the previous
+    // snapshot survives the reload through the sets' strong card lists.
+    detachSetMembership();
 
     cards = std::move(data.cards);
     simpleNameCards = std::move(data.simpleNameCards);

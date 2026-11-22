@@ -1,5 +1,6 @@
 #include "edhrec_api_response_card_details_display_widget.h"
 
+#include "../../../../../../theme_manager.h"
 #include "../../../../../cards/card_info_picture_widget.h"
 #include "../../../../../cards/card_size_widget.h"
 #include "../../../../../general/display/background_plate_widget.h"
@@ -9,12 +10,14 @@
 #include "edhrec_api_response_card_synergy_display_widget.h"
 #include "libcockatrice/card/database/card_database_querier.h"
 
+#include <QFont>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QObject>
 #include <QSlider>
 #include <QVBoxLayout>
 #include <libcockatrice/card/database/card_database_manager.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 EdhrecApiResponseCardDetailsDisplayWidget::EdhrecApiResponseCardDetailsDisplayWidget(
@@ -31,7 +34,9 @@ EdhrecApiResponseCardDetailsDisplayWidget::EdhrecApiResponseCardDetailsDisplayWi
     nameLabel = new QLabel(this);
     nameLabel->setText(toDisplay.name);
     nameLabel->setAlignment(Qt::AlignHCenter);
-    nameLabel->setStyleSheet("font-size: 20px; font-weight: bold");
+    applyCardTextFont();
+    connect(themeManager, &ThemeManager::fontsChanged, this,
+            &EdhrecApiResponseCardDetailsDisplayWidget::applyCardTextFont);
 
     inclusionDisplayWidget = new EdhrecApiResponseCardInclusionDisplayWidget(this, toDisplay);
 
@@ -47,15 +52,7 @@ EdhrecApiResponseCardDetailsDisplayWidget::EdhrecApiResponseCardDetailsDisplayWi
 
     layout->addWidget(backgroundPlateWidget);
 
-    QWidget *currentParent = parentWidget();
-    TabEdhRecMain *parentTab = nullptr;
-
-    while (currentParent) {
-        if ((parentTab = qobject_cast<TabEdhRecMain *>(currentParent))) {
-            break;
-        }
-        currentParent = currentParent->parentWidget();
-    }
+    auto *parentTab = QtUtils::findParentOfType<TabEdhRecMain>(this);
 
     if (parentTab) {
         cardPictureWidget->setScaleFactor(parentTab->getCardSizeSlider()->getSlider()->value());
@@ -92,4 +89,15 @@ void EdhrecApiResponseCardDetailsDisplayWidget::leaveEvent(QEvent *event)
 void EdhrecApiResponseCardDetailsDisplayWidget::actRequestPageNavigation()
 {
     emit requestUrl(toDisplay.url);
+}
+
+void EdhrecApiResponseCardDetailsDisplayWidget::applyCardTextFont()
+{
+    // Family comes from the CardText theme role; the 20px size and bold
+    // weight previously carried by the stylesheet stay caller-side. Pixel
+    // size, not point size: the stylesheet said 20px, and 20pt is ~27px.
+    QFont cardFont = themeManager->appFont(AppFont::CardText);
+    cardFont.setPixelSize(20);
+    cardFont.setWeight(QFont::Bold);
+    nameLabel->setFont(cardFont);
 }

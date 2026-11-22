@@ -1,6 +1,7 @@
 #include "oraclewizard.h"
 
 #include "client/settings/cache_settings.h"
+#include "database_writer.h"
 #include "main.h"
 #include "oracleimporter.h"
 #include "pages.h"
@@ -22,6 +23,7 @@
 #include <QWindow>
 #include <QWizardPage>
 #include <QtGlobal>
+#include <libcockatrice/network/network_manager.h>
 #include <libcockatrice/settings/cards_display_settings.h>
 #include <libcockatrice/settings/personal_settings.h>
 #include <libcockatrice/utility/local_server_name.h>
@@ -31,9 +33,6 @@ class QWidget;
 
 OracleWizard::OracleWizard(QWidget *parent) : QWizard(parent)
 {
-    // define a dummy context that will be used where needed
-    QString dummy = QT_TRANSLATE_NOOP("i18n", "English");
-
 #ifdef Q_OS_WIN
     setWizardStyle(QWizard::ModernStyle);
 #endif
@@ -53,12 +52,13 @@ OracleWizard::OracleWizard(QWidget *parent) : QWizard(parent)
     // foreignData for any other language is never imported.
     importer->setCardLang(SettingsCache::instance().cardsDisplay().getCardLang());
 
-    nam = new QNetworkAccessManager(this);
+    nam = NetworkManagerFactory::create(this);
 
     QList<OracleWizardPage *> pages;
 
     if (!isSpoilersOnly) {
-        pages << new IntroPage << new LoadSetsPage << new SaveSetsPage << new LoadTokensPage << new OutroPage;
+        pages << new IntroPage << new LoadSetsPage << new TagsPage << new SaveSetsPage << new LoadTokensPage
+              << new OutroPage;
     } else {
         pages << new LoadSpoilersPage << new OutroPage;
     }
@@ -128,13 +128,28 @@ void OracleWizard::accept()
 
 void OracleWizard::reject()
 {
+    cancelled = true;
+
     // The wizard is being closed while a page may still run a worker on the
     // importer. Ask it to stop before the wizard (and the importer child) is
     // destroyed, so the worker thread never touches freed memory.
     if (auto *active = dynamic_cast<OracleWizardPage *>(currentPage())) {
         active->cancelWork();
     }
+
+    const auto replies = nam->findChildren<QNetworkReply *>();
+    for (QNetworkReply *reply : replies) {
+        reply->abort();
+    }
+
     QWizard::reject();
+    // A hidden wizard does not close the application's last visible window.
+    // Stop background refreshes explicitly so the hosting client receives a verdict,
+    // using the same rule as main(): a reject after the database was written is still
+    // a successful update, only a reject that wrote nothing counts as a failure.
+    if (backgroundMode) {
+        QCoreApplication::exit(hasSavedDatabase() ? 0 : 1);
+    }
 }
 
 void OracleWizard::runInBackground()
@@ -206,17 +221,10 @@ void OracleWizard::disableButtons()
 
 bool OracleWizard::saveTokensToFile(const QString &fileName)
 {
-    QFile file(fileName);
-    if (!file.open(QIODevice::WriteOnly)) {
-        qDebug() << "File open (w) failed for" << fileName;
+    QString error;
+    if (!OracleDatabase::saveXml(fileName, tokensData, &error)) {
+        qWarning() << error;
         return false;
     }
-
-    if (file.write(tokensData) == -1) {
-        qDebug() << "File write (w) failed for" << fileName;
-        return false;
-    }
-
-    file.close();
     return true;
 }

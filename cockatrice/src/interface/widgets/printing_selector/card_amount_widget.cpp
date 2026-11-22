@@ -1,5 +1,6 @@
 #include "card_amount_widget.h"
 
+#include "../../theme_manager.h"
 #include "../deck_editor/deck_state_manager.h"
 #include "../general/display/dynamic_font_size_push_button.h"
 #include "deck_list_model.h"
@@ -22,6 +23,7 @@
 #include <QVariant>
 #include <algorithm>
 #include <functional>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 class QModelIndex;
@@ -42,9 +44,7 @@ CardAmountWidget::CardAmountWidget(QWidget *parent,
     : QWidget(parent), deckStateManager(deckStateManager), cardSizeSlider(cardSizeSlider), rootCard(rootCard),
       zoneName(zoneName), hovered(false)
 {
-    layout = new QHBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(10);
+    layout = QtUtils::makeLayout<QHBoxLayout>(this, 10);
     this->setLayout(layout);
     this->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     layout->setAlignment(Qt::AlignHCenter);
@@ -78,6 +78,7 @@ CardAmountWidget::CardAmountWidget(QWidget *parent,
 
     // Connect slider for dynamic font size adjustment
     connect(cardSizeSlider, &QSlider::valueChanged, this, &CardAmountWidget::adjustFontSize);
+    connect(themeManager, &ThemeManager::fontsChanged, this, &CardAmountWidget::applyCardTextFont);
 }
 
 int CardAmountWidget::getAmount()
@@ -139,8 +140,9 @@ void CardAmountWidget::adjustFontSize(int scalePercentage)
     int newFontSize = minFontSize + (scalePercentage - basePercentage) * (maxFontSize - minFontSize) / 225;
     newFontSize = std::clamp(newFontSize, minFontSize, maxFontSize);
 
-    // Update the font for card count label
-    QFont cardCountFont = cardCountInZone->font();
+    // Update the font for card count label. The family comes from the
+    // CardText theme role; the slider-driven point size stays as before.
+    QFont cardCountFont = themeManager->appFont(AppFont::CardText);
     cardCountFont.setPointSize(newFontSize);
     cardCountInZone->setFont(cardCountFont);
 
@@ -149,6 +151,11 @@ void CardAmountWidget::adjustFontSize(int scalePercentage)
 
     // Repaint the widget
     repaint();
+}
+
+void CardAmountWidget::applyCardTextFont()
+{
+    adjustFontSize(cardSizeSlider->value());
 }
 
 /**
@@ -165,7 +172,8 @@ static QString zoneLogName(const QString &zone)
 {
     if (zone == DECK_ZONE_MAIN) {
         return "mainboard";
-    } else if (zone == DECK_ZONE_SIDE) {
+    }
+    if (zone == DECK_ZONE_SIDE) {
         return "sideboard";
     } else if (zone == DECK_ZONE_TOKENS) {
         return "tokens";

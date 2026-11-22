@@ -1,7 +1,7 @@
 #include "visual_deck_editor_widget.h"
 
 #include "../../../client/settings/cache_settings.h"
-#include "../../pixel_map_generator.h"
+#include "../../theme_icon.h"
 #include "../cards/card_size_widget.h"
 #include "../cards/deck_card_zone_display_widget.h"
 #include "../general/layout_containers/flow_widget.h"
@@ -42,6 +42,7 @@
 #include <libcockatrice/models/database/card_database_model.h>
 #include <libcockatrice/models/deck_list/deck_list_model.h>
 #include <libcockatrice/settings/cards_display_settings.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 VisualDeckEditorWidget::VisualDeckEditorWidget(QWidget *parent,
@@ -143,7 +144,7 @@ void VisualDeckEditorWidget::initializeSearchBarAndCompleter()
 
     // Search button functionality
     searchPushButton = new CompactPushButton(searchContainer);
-    searchPushButton->setButtonIcon(themePixmap(QStringLiteral("icons/search")));
+    searchPushButton->setButtonIcon(loadThemedIcon(QStringLiteral("icons/search")));
     connect(searchPushButton, &QPushButton::clicked, this, [this] { addCardFromSearch(); });
 
     searchLayout->addWidget(searchPushButton);
@@ -188,13 +189,8 @@ void VisualDeckEditorWidget::initializeDisplayOptionsAndSearchWidget()
 
 void VisualDeckEditorWidget::initializeScrollAreaAndZoneContainer()
 {
-    scrollArea = new QScrollArea(this);
-    scrollArea->setWidgetResizable(true);
+    scrollArea = QtUtils::makeScrollArea(this);
     scrollArea->setMinimumSize(0, 0);
-
-    // Set scrollbar policies
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     zoneContainer = new QWidget(scrollArea);
     zoneContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);

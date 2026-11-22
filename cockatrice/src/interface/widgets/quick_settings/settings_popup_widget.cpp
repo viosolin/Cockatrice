@@ -8,6 +8,7 @@
 #include <QScrollArea>
 #include <QSize>
 #include <QVBoxLayout>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 SettingsPopupWidget::SettingsPopupWidget(QWidget *parent) : QWidget(parent, Qt::Popup | Qt::FramelessWindowHint)
@@ -54,11 +55,8 @@ void SettingsPopupWidget::adjustSizeToFitScreen()
     if (contentHeight > maxHeight) {
         // Create a scroll area and add the container widget to it if not already created
         if (!scrollArea) {
-            scrollArea = new QScrollArea(this);
-            scrollArea->setWidgetResizable(true);
+            scrollArea = QtUtils::makeScrollArea(this, Qt::ScrollBarAlwaysOn);
             scrollArea->setFrameShape(QFrame::NoFrame);
-            scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // No horizontal scrollbar
-            scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);    // Enable vertical scrollbar when needed
         }
 
         // Set maximum height for the scroll area and show vertical scrollbar
@@ -68,15 +66,24 @@ void SettingsPopupWidget::adjustSizeToFitScreen()
         resize(sizeHint().width(), maxHeight); // Ensure content width is kept intact
 
         // Add scrollArea to layout if not already added
-        if (layout->count() == 1) { // We only have one widget (containerWidget) at the start
+        if (layout->indexOf(scrollArea) == -1) {
             layout->addWidget(scrollArea);
         }
 
-        // Set the scroll area widget
-        scrollArea->setWidget(containerWidget);
+        // Set the scroll area widget; it takes ownership of containerWidget until handed back above
+        if (scrollArea->widget() != containerWidget) {
+            layout->removeWidget(containerWidget);
+            scrollArea->setWidget(containerWidget);
+        }
     } else {
-        // If the scroll area exists, remove it
+        // If the scroll area exists, remove it. QScrollArea owns the widget set on it and would
+        // delete containerWidget (and every settings widget inside it) along with itself, so take
+        // the container back before deleting the scroll area.
         if (scrollArea) {
+            if (scrollArea->widget() == containerWidget) {
+                scrollArea->takeWidget();
+                containerWidget->setParent(this);
+            }
             layout->removeWidget(scrollArea);
             delete scrollArea;
             scrollArea = nullptr; // Reset the pointer
@@ -84,7 +91,10 @@ void SettingsPopupWidget::adjustSizeToFitScreen()
 
         // Set the containerWidget directly without scrollArea and adjust its height
         resize(sizeHint().width(), contentHeight); // Resize the widget based on content height
-        layout->addWidget(containerWidget);        // Re-add the containerWidget without scroll area
+        if (layout->indexOf(containerWidget) == -1) {
+            layout->addWidget(containerWidget); // Re-add the containerWidget without scroll area
+        }
+        containerWidget->show();
     }
 
     // Ensure layout updates after changes

@@ -2,9 +2,7 @@
 
 #include "../../../client/settings/cache_settings.h"
 #include "../../../interface/widgets/tabs/tab_supervisor.h"
-#include "../../deck_loader/deck_file_format.h"
 #include "../../deck_loader/deck_loader.h"
-#include "../../deck_loader/loaded_deck.h"
 #include "../../pixel_map_generator.h"
 #include "../../theme_config.h"
 #include "../../theme_manager.h"
@@ -29,10 +27,11 @@
 #include <QFlags>
 #include <QFont>
 #include <QFontMetrics>
-#include <QGridLayout>
+#include <QFrame>
 #include <QGroupBox>
 #include <QImage>
 #include <QLabel>
+#include <QLayout>
 #include <QLinearGradient>
 #include <QList>
 #include <QMap>
@@ -46,9 +45,9 @@
 #include <QRect>
 #include <QRectF>
 #include <QRgb>
+#include <QScrollArea>
 #include <QSharedPointer>
 #include <QSize>
-#include <QSizePolicy>
 #include <QString>
 #include <QStringLiteral>
 #include <QTimer>
@@ -57,9 +56,12 @@
 #include <QtGlobal>
 #include <algorithm>
 #include <libcockatrice/card/database/card_database_manager.h>
+#include <libcockatrice/deck_list/deck_file_format.h>
+#include <libcockatrice/deck_list/loaded_deck.h>
 #include <libcockatrice/network/client/remote/remote_client.h>
 #include <libcockatrice/settings/appearance_settings.h>
 #include <libcockatrice/settings/paths_settings.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <optional>
 #include <qlogging.h>
 #include <qnamespace.h>
@@ -68,20 +70,26 @@
 HomeWidget::HomeWidget(QWidget *parent, TabSupervisor *_tabSupervisor)
     : QWidget(parent), tabSupervisor(_tabSupervisor), background(themePixmap(QStringLiteral("backgrounds/home")))
 {
-    layout = new QGridLayout(this);
+    setObjectName("homeWidget");
 
     backgroundSourceCard = new CardInfoPictureArtCropWidget(this);
 
     gradientColors = determineButtonColor();
 
-    layout->addWidget(createButtons(), 1, 1, Qt::AlignVCenter | Qt::AlignHCenter);
+    // The launcher keeps its natural size on a large display and stays centred in the
+    // viewport. On a small window it scrolls, instead of its combined minimum height
+    // becoming the minimum height of the entire application.
+    auto *scrollArea = QtUtils::makeScrollArea(this, Qt::ScrollBarAsNeeded, Qt::ScrollBarAsNeeded);
+    scrollArea->setObjectName("homeActionsScrollArea");
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setWidgetResizable(false);
+    scrollArea->setAlignment(Qt::AlignCenter);
+    // The home background is painted by this widget, so let it show through the viewport.
+    scrollArea->viewport()->setAutoFillBackground(false);
+    scrollArea->setWidget(createButtons());
 
-    layout->setRowStretch(0, 1);
-    layout->setRowStretch(2, 1);
-    layout->setColumnStretch(0, 1);
-    layout->setColumnStretch(2, 1);
-
-    setLayout(layout);
+    auto *layout = new QVBoxLayout(this);
+    layout->addWidget(scrollArea);
 
     cardChangeTimer = new QTimer(this);
     connect(cardChangeTimer, &QTimer::timeout, this, &HomeWidget::updateRandomCard);
@@ -111,6 +119,32 @@ HomeWidget::HomeWidget(QWidget *parent, TabSupervisor *_tabSupervisor)
     connect(themeManager, &ThemeManager::paletteChanged, this, &HomeWidget::updateLogoOverlay);
     connect(&SettingsCache::instance().appearance(), &AppearanceSettings::homeTabButtonColorChanged, this,
             &HomeWidget::updateButtonsToBackgroundColor);
+}
+
+void HomeWidget::retranslateUi()
+{
+    visualDeckEditorButton->setText(tr("Create New Deck"));
+    visualDeckStorageButton->setText(tr("Browse Decks"));
+    visualDatabaseDisplayButton->setText(tr("Browse Card Database"));
+    edhrecButton->setText(tr("Browse EDHRec"));
+    archidektButton->setText(tr("Browse Archidekt"));
+    replayButton->setText(tr("View Replays"));
+    if (exitButton) {
+        exitButton->setText(tr("Quit"));
+    }
+
+    switch (connectionStatus) {
+        case StatusDisconnected:
+            connectButton->setText(tr("Connect"));
+            break;
+        case StatusLoggedIn:
+            connectButton->setText(tr("Play"));
+            break;
+        default:
+            // Connecting, registering, activating, logging in, etc.
+            connectButton->setText(tr("Connecting..."));
+            break;
+    }
 }
 
 void HomeWidget::initializeBackgroundFromSource()
@@ -261,22 +295,25 @@ void HomeWidget::updateButtonsToBackgroundColor()
 QGroupBox *HomeWidget::createButtons()
 {
     QGroupBox *box = new QGroupBox(this);
-    box->setStyleSheet(R"(
-    QGroupBox {
-        font-size: 20px;
-        color: white;         /* Title text color */
-        background: transparent;
-    }
-
-    QGroupBox::title {
-        color: white;
-        subcontrol-origin: margin;
-        subcontrol-position: top center;  /* or top left / right */
-    }
-)");
-    box->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    box->setObjectName("homeButtonsBox");
+    // The box only stacks the logo and the actions: no frame, and no background of its
+    // own, so the home background art stays visible. It never shows a title. The rule is
+    // load-bearing: QScrollArea::setWidget() turns autoFillBackground on for its widget.
+    box->setStyleSheet("QGroupBox { background: transparent; border: none; }");
+    // Family comes from the InterfaceDefault theme role; the 20px size stays caller-side.
+    auto applyBoxFont = [box]() {
+        QFont boxFont = themeManager->appFont(AppFont::InterfaceDefault);
+        boxFont.setPixelSize(20);
+        box->setFont(boxFont);
+    };
+    applyBoxFont();
+    connect(themeManager, &ThemeManager::fontsChanged, this, applyBoxFont);
     QVBoxLayout *boxLayout = new QVBoxLayout;
     boxLayout->setAlignment(Qt::AlignHCenter);
+    // The scroll area is not resizable, so the box has to size itself: SetFixedSize keeps
+    // it at its content size and re-fixes it whenever the labels or fonts change, which is
+    // what makes the scroll area's scroll bars follow the content.
+    boxLayout->setSizeConstraint(QLayout::SetFixedSize);
 
     logoLabel = new QLabel;
     logoLabel->setAlignment(Qt::AlignCenter);
@@ -284,32 +321,39 @@ QGroupBox *HomeWidget::createButtons()
     updateLogoOverlay();
     boxLayout->addSpacing(25);
 
-    connectButton = new HomeStyledButton("Connect/Play", gradientColors);
+    connectButton = new HomeStyledButton(QString(), gradientColors);
+    connectButton->setObjectName("homeConnectButton");
     boxLayout->addWidget(connectButton);
 
-    auto visualDeckEditorButton = new HomeStyledButton(tr("Create New Deck"), gradientColors);
+    visualDeckEditorButton = new HomeStyledButton(QString(), gradientColors);
+    visualDeckEditorButton->setObjectName("homeCreateNewDeckButton");
     connect(visualDeckEditorButton, &QPushButton::clicked, tabSupervisor,
             [this] { tabSupervisor->openDeckInNewTab(LoadedDeck()); });
     boxLayout->addWidget(visualDeckEditorButton);
-    auto visualDeckStorageButton = new HomeStyledButton(tr("Browse Decks"), gradientColors);
+    visualDeckStorageButton = new HomeStyledButton(QString(), gradientColors);
+    visualDeckStorageButton->setObjectName("homeBrowseDecksButton");
     connect(visualDeckStorageButton, &QPushButton::clicked, tabSupervisor,
             [this] { tabSupervisor->actTabVisualDeckStorage(true); });
     boxLayout->addWidget(visualDeckStorageButton);
-    auto visualDatabaseDisplayButton = new HomeStyledButton(tr("Browse Card Database"), gradientColors);
+    visualDatabaseDisplayButton = new HomeStyledButton(QString(), gradientColors);
+    visualDatabaseDisplayButton->setObjectName("homeBrowseCardDatabaseButton");
     connect(visualDatabaseDisplayButton, &QPushButton::clicked, tabSupervisor,
             &TabSupervisor::addVisualDatabaseDisplayTab);
     boxLayout->addWidget(visualDatabaseDisplayButton);
-    auto edhrecButton = new HomeStyledButton(tr("Browse EDHRec"), gradientColors);
+    edhrecButton = new HomeStyledButton(QString(), gradientColors);
+    edhrecButton->setObjectName("homeBrowseEdhrecButton");
     connect(edhrecButton, &QPushButton::clicked, tabSupervisor, &TabSupervisor::addEdhrecMainTab);
     boxLayout->addWidget(edhrecButton);
-    auto archidektButton = new HomeStyledButton(tr("Browse Archidekt"), gradientColors);
+    archidektButton = new HomeStyledButton(QString(), gradientColors);
+    archidektButton->setObjectName("homeBrowseArchidektButton");
     connect(archidektButton, &QPushButton::clicked, tabSupervisor, &TabSupervisor::addArchidektTab);
     boxLayout->addWidget(archidektButton);
-    auto replaybutton = new HomeStyledButton(tr("View Replays"), gradientColors);
-    connect(replaybutton, &QPushButton::clicked, tabSupervisor, [this] { tabSupervisor->actTabReplays(true); });
-    boxLayout->addWidget(replaybutton);
+    replayButton = new HomeStyledButton(QString(), gradientColors);
+    replayButton->setObjectName("homeViewReplaysButton");
+    connect(replayButton, &QPushButton::clicked, tabSupervisor, [this] { tabSupervisor->actTabReplays(true); });
+    boxLayout->addWidget(replayButton);
     if (qobject_cast<MainWindow *>(tabSupervisor->parentWidget())) {
-        auto exitButton = new HomeStyledButton(tr("Quit"), gradientColors);
+        exitButton = new HomeStyledButton(QString(), gradientColors);
         connect(exitButton, &QPushButton::clicked, qobject_cast<MainWindow *>(tabSupervisor->parentWidget()),
                 &MainWindow::actExit);
         boxLayout->addWidget(exitButton);
@@ -321,20 +365,18 @@ QGroupBox *HomeWidget::createButtons()
 
 void HomeWidget::updateConnectButton(const ClientStatus status)
 {
+    connectionStatus = status;
     disconnect(connectButton, &QPushButton::clicked, nullptr, nullptr);
     switch (status) {
         case StatusConnecting:
-            connectButton->setText(tr("Connecting..."));
             connectButton->setEnabled(false);
             break;
         case StatusDisconnected:
-            connectButton->setText(tr("Connect"));
             connectButton->setEnabled(true);
             connect(connectButton, &QPushButton::clicked, qobject_cast<MainWindow *>(tabSupervisor->parentWidget()),
                     &MainWindow::actConnect);
             break;
         case StatusLoggedIn:
-            connectButton->setText(tr("Play"));
             connectButton->setEnabled(true);
             connect(connectButton, &QPushButton::clicked, tabSupervisor,
                     &TabSupervisor::switchToFirstAvailableNetworkTab);
@@ -342,6 +384,7 @@ void HomeWidget::updateConnectButton(const ClientStatus status)
         default:
             break;
     }
+    retranslateUi();
 }
 
 QPair<QColor, QColor> HomeWidget::extractDominantColors(const QPixmap &pixmap)
@@ -438,7 +481,9 @@ void HomeWidget::paintEvent(QPaintEvent *event)
     constexpr int margin = 15;
     constexpr qreal attributionMargin = 4.0;
 
-    QFont attributionFont = painter.font();
+    // Family comes from the InterfaceDefault theme role; the 14px sizes and
+    // bold weights stay caller-side as before.
+    QFont attributionFont = themeManager->appFont(AppFont::InterfaceDefault);
     attributionFont.setPointSize(14);
     attributionFont.setBold(true);
     painter.setFont(attributionFont);
@@ -451,7 +496,7 @@ void HomeWidget::paintEvent(QPaintEvent *event)
 
     // Card name bubble above the attribution (when enabled).
     if (!cardName.isEmpty() && SettingsCache::instance().appearance().getHomeTabDisplayCardName()) {
-        QFont font = painter.font();
+        QFont font = themeManager->appFont(AppFont::InterfaceDefault);
         font.setPointSize(14);
         font.setBold(true);
         painter.setFont(font);

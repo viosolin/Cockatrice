@@ -37,6 +37,7 @@
 #include "../interface/widgets/tabs/tab_supervisor.h"
 #include "../main.h"
 #include "abstract_client.h"
+#include "at_risk_data_warning.h"
 #include "card_database_update/card_database_update_status_bar.h"
 #include "card_database_update/card_update_progress.h"
 #include "intents/contexts/context_connect_to_server.h"
@@ -49,22 +50,30 @@
 #include "latency_tracker.h"
 #include "logger.h"
 #include "pixel_map_generator.h"
+#include "theme_icon.h"
 #include "version_string.h"
 #include "widgets/dialogs/dlg_connect.h"
 #include "widgets/server/handle_public_servers.h"
 #include "widgets/settings_page/abstract_settings_page.h"
 #include "widgets/tabs/api/commander_spellbook/handle_commander_brackets.h"
+#ifdef WITH_GUI_TEST
+#include "../game_graphics/pq_cockatrice_event_player.h"
+#include "pqEventObserver.h"
+#include "pqEventSource.h"
+#include "pqEventTypes.h"
+#include "pqTestUtility.h"
+#include "pq_widget_test_event_player.h"
+#include "recording.h"
+#endif
 
 #include <QAction>
 #include <QApplication>
 #include <QButtonGroup>
-#include <QCheckBox>
 #include <QCloseEvent>
-#include <QCoreApplication>
 #include <QDateTime>
 #include <QDebug>
-#include <QDesktopServices>
 #include <QDialog>
+#include <QDir>
 #include <QEvent>
 #include <QFile>
 #include <QFileDialog>
@@ -82,10 +91,12 @@
 #include <QPixmapCache>
 #include <QPushButton>
 #include <QSharedPointer>
+#include <QSize>
 #include <QStatusBar>
 #include <QStringLiteral>
 #include <QSystemTrayIcon>
 #include <QTimer>
+#include <QToolButton>
 #include <QWidget>
 #include <QtConcurrentRun>
 #include <QtGlobal>
@@ -110,6 +121,7 @@
 #include <libcockatrice/settings/tabs_settings.h>
 #include <libcockatrice/settings/updates_settings.h>
 #include <libcockatrice/utility/local_server_name.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <memory>
 #include <qlogging.h>
 #include <qnamespace.h>
@@ -252,7 +264,11 @@ void MainWindow::actWatchReplay()
 
 void MainWindow::localGameEnded()
 {
-    delete localServer;
+    // Defer deletion so the LocalClients (already scheduled with deleteLater() in TabSupervisor::stop)
+    // and any queued commands are processed before the server and its interfaces are destroyed.
+    if (localServer) {
+        localServer->deleteLater();
+    }
     localServer = nullptr;
 
     aConnect->setEnabled(true);
@@ -304,6 +320,7 @@ void MainWindow::actAbout()
     mb.setIconPixmap(
         themePixmap(QStringLiteral("cockatrice")).scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     mb.setTextInteractionFlags(Qt::TextBrowserInteraction);
+    mb.setObjectName("aboutDialog");
     mb.exec();
 }
 
@@ -339,8 +356,26 @@ void MainWindow::actViewLog()
 void MainWindow::actOpenSettingsFolder()
 {
     QString dir = SettingsCache::instance().getSettingsPath();
-    QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+    QtUtils::openPathInFileManager(dir);
 }
+
+#ifdef WITH_GUI_TEST
+void MainWindow::actRecord()
+{
+    QString filename = QFileDialog::getSaveFileName(this, tr("Test File Name"), QString(), tr("XML Files (*.xml)"));
+    if (!filename.isEmpty()) {
+        testUtility->recordTests(filename);
+    }
+}
+
+void MainWindow::actPlayRecording()
+{
+    QString filename = QFileDialog::getOpenFileName(this, tr("Test File Name"), QString(), tr("XML Files (*.xml)"));
+    if (!filename.isEmpty()) {
+        testUtility->playTests(filename);
+    }
+}
+#endif
 
 void MainWindow::retranslateUi()
 {
@@ -354,7 +389,10 @@ void MainWindow::retranslateUi()
     aRegister->setText(tr("&Register to server..."));
     aForgotPassword->setText(tr("&Restore password..."));
     aSettings->setText(tr("&Settings..."));
-    aSettings->setIcon(themePixmap(QStringLiteral("icons/settings")));
+    aSettings->setIcon(loadThemedIcon(QStringLiteral("icons/settings")));
+    settingsButton->setToolTip(tr("Settings"));
+    settingsButton->setAccessibleName(tr("Settings"));
+    settingsButton->setIcon(loadThemedIcon(QStringLiteral("icons/settings")));
     aExit->setText(tr("&Exit"));
 
 #if defined(__APPLE__) /* For OSX */
@@ -383,6 +421,10 @@ void MainWindow::retranslateUi()
     aViewLog->setText(tr("View &Debug Log"));
     aOpenSettingsFolder->setText(tr("Open Settings Folder"));
     aFirstRunWizard->setText(tr("Re-run Onboarding Wizard..."));
+#ifdef WITH_GUI_TEST
+    aRecord->setText(tr("&Record Test..."));
+    aPlayRecording->setText(tr("&Play Test..."));
+#endif
 
     aShow->setText(tr("Show/Hide"));
 
@@ -392,24 +434,33 @@ void MainWindow::retranslateUi()
 void MainWindow::createActions()
 {
     aConnect = new QAction(this);
+    aConnect->setObjectName("actionConnect");
     connect(aConnect, &QAction::triggered, this, &MainWindow::actConnect);
     aDisconnect = new QAction(this);
+    aDisconnect->setObjectName("actionDisconnect");
     aDisconnect->setEnabled(false);
     connect(aDisconnect, &QAction::triggered, this, &MainWindow::actDisconnect);
     aSinglePlayer = new QAction(this);
+    aSinglePlayer->setObjectName("actionSinglePlayer");
     connect(aSinglePlayer, &QAction::triggered, this, &MainWindow::actSinglePlayer);
     aWatchReplay = new QAction(this);
+    aWatchReplay->setObjectName("actionWatchReplay");
     connect(aWatchReplay, &QAction::triggered, this, &MainWindow::actWatchReplay);
     aFullScreen = new QAction(this);
+    aFullScreen->setObjectName("actionFullScreen");
     aFullScreen->setCheckable(true);
     connect(aFullScreen, &QAction::toggled, this, &MainWindow::actFullScreen);
     aRegister = new QAction(this);
+    aRegister->setObjectName("actionRegister");
     connect(aRegister, &QAction::triggered, connectionController, &ConnectionController::registerToServer);
     aForgotPassword = new QAction(this);
+    aForgotPassword->setObjectName("actionForgotPassword");
     connect(aForgotPassword, &QAction::triggered, connectionController, &ConnectionController::forgotPasswordRequest);
     aSettings = new QAction(this);
+    aSettings->setObjectName("actionSettings");
     connect(aSettings, &QAction::triggered, this, &MainWindow::actSettings);
     aExit = new QAction(this);
+    aExit->setObjectName("actionExit");
     connect(aExit, &QAction::triggered, this, &MainWindow::actExit);
 
     aManageSets = new QAction(QString(), this);
@@ -446,6 +497,12 @@ void MainWindow::createActions()
     connect(aOpenSettingsFolder, &QAction::triggered, this, &MainWindow::actOpenSettingsFolder);
     aFirstRunWizard = new QAction(this);
     connect(aFirstRunWizard, &QAction::triggered, this, [this] { runFirstRunWizard(); });
+#ifdef WITH_GUI_TEST
+    aRecord = new QAction(this);
+    connect(aRecord, &QAction::triggered, this, &MainWindow::actRecord);
+    aPlayRecording = new QAction(this);
+    connect(aPlayRecording, &QAction::triggered, this, &MainWindow::actPlayRecording);
+#endif
 
     aShow = new QAction(this);
     connect(aShow, &QAction::triggered, this, &MainWindow::actShow);
@@ -486,7 +543,9 @@ void MainWindow::createActions()
 
 void MainWindow::createMenus()
 {
+    menuBar()->setObjectName("menubar");
     cockatriceMenu = menuBar()->addMenu(QString());
+    cockatriceMenu->setObjectName("cockatriceMenu");
     cockatriceMenu->addAction(aConnect);
     cockatriceMenu->addAction(aDisconnect);
     cockatriceMenu->addAction(aRegister);
@@ -502,6 +561,7 @@ void MainWindow::createMenus()
     cockatriceMenu->addAction(aExit);
 
     dbMenu = menuBar()->addMenu(QString());
+    dbMenu->setObjectName("dbMenu");
     dbMenu->addAction(aManageSets);
     dbMenu->addAction(aEditTokens);
     dbMenu->addSeparator();
@@ -512,8 +572,10 @@ void MainWindow::createMenus()
     dbMenu->addAction(aReloadCardDatabase);
 
     tabsMenu = menuBar()->addMenu(QString());
+    tabsMenu->setObjectName("tabsMenu");
 
     helpMenu = menuBar()->addMenu(QString());
+    helpMenu->setObjectName("helpMenu");
     helpMenu->addAction(aAbout);
     helpMenu->addAction(aTips);
     helpMenu->addSeparator();
@@ -526,12 +588,19 @@ void MainWindow::createMenus()
     helpMenu->addAction(aOpenSettingsFolder);
     helpMenu->addSeparator();
     helpMenu->addAction(aFirstRunWizard);
+#ifdef WITH_GUI_TEST
+    helpMenu->addSeparator();
+    helpMenu->addAction(aRecord);
+    helpMenu->addAction(aPlayRecording);
+#endif
 }
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), localServer(nullptr), bHasActivated(false), askedForDbUpdater(false),
+    : QMainWindow(parent), localServer(nullptr), bHasActivated(false), askedForDbUpdater(false), noConnect(false),
       cardUpdateProcess(nullptr), logviewDialog(nullptr)
 {
+    setObjectName("MainWindow");
+
     connect(&SettingsCache::instance().cacheStorage(), &CacheStorageSettings::pixmapCacheSizeChanged, this,
             &MainWindow::pixmapCacheSizeChanged);
     pixmapCacheSizeChanged(SettingsCache::instance().cacheStorage().getPixmapCacheSize());
@@ -558,6 +627,19 @@ MainWindow::MainWindow(QWidget *parent)
     tabSupervisor->initStartupTabs();
 
     setCentralWidget(tabSupervisor);
+
+    // Unobtrusive settings entry in the tab bar corner: flat icon-only button that blends into the tab
+    // bar until hovered, mirroring the menu action for discoverability
+    settingsButton = new QToolButton(tabSupervisor);
+    settingsButton->setAutoRaise(true);
+    settingsButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    settingsButton->setIconSize(QSize(16, 16));
+    settingsButton->setCursor(Qt::PointingHandCursor);
+    settingsButton->setFocusPolicy(Qt::NoFocus);
+    settingsButton->setStyleSheet(
+        QStringLiteral("QToolButton { border: none; background: transparent; padding: 4px; }"));
+    connect(settingsButton, &QToolButton::clicked, this, &MainWindow::actSettings);
+    tabSupervisor->setCornerWidget(settingsButton, Qt::TopRightCorner);
 
     retranslateUi();
 
@@ -604,40 +686,20 @@ MainWindow::MainWindow(QWidget *parent)
     // run startup check async
     QTimer::singleShot(0, this, &MainWindow::startupConfigCheck);
     QTimer::singleShot(0, this, &MainWindow::applyStartupDestination);
-}
 
-void MainWindow::warnAboutDataPathsInProgramDir()
-{
-    auto &paths = SettingsCache::instance().paths();
-    if (SettingsCache::instance().getIsPortableBuild() || paths.getAppDirWarningAcknowledged()) {
-        return;
-    }
-
-    const QStringList offenders = paths.pathsInsideDir(QCoreApplication::applicationDirPath());
-    if (offenders.isEmpty()) {
-        return;
-    }
-
-    QMessageBox box(QMessageBox::Warning, tr("Data paths inside the program directory"),
-                    tr("These paths are configured inside the Cockatrice program directory:\n\n%1\n\n"
-                       "Cockatrice keeps its own data outside the program directory by default. Files "
-                       "stored inside it can be deleted by an update or by uninstalling Cockatrice. "
-                       "Change them in the Settings dialog - most are on the General page - to keep "
-                       "them safe.")
-                        .arg(offenders.join(QLatin1Char('\n'))),
-                    QMessageBox::Ok, this);
-    box.setTextFormat(Qt::PlainText);
-    auto *dontShowAgain = new QCheckBox(tr("Don't show this again"));
-    box.setCheckBox(dontShowAgain);
-    box.exec();
-    if (dontShowAgain->isChecked()) {
-        paths.setAppDirWarningAcknowledged(true);
-    }
+#ifdef WITH_GUI_TEST
+    testUtility = new pqTestUtility(this);
+    testUtility->setRecordWithDialog(true);
+    testUtility->addEventObserver("xml", new XMLEventObserver(this));
+    testUtility->addEventSource("xml", new XMLEventSource(this));
+    testUtility->eventPlayer()->addWidgetEventPlayer(new pqCockatriceEventPlayer(this));
+    testUtility->eventPlayer()->addWidgetEventPlayer(new pqWidgetTestEventPlayer(this));
+#endif
 }
 
 void MainWindow::startupConfigCheck()
 {
-    warnAboutDataPathsInProgramDir();
+    AtRiskDataWarning::warnAboutDataPathsInProgramDir(this);
 
     const bool isCleanInstall = SettingsCache::instance().network().getClientVersion() == CLIENT_INFO_NOT_SET;
 
@@ -787,6 +849,11 @@ void MainWindow::runFirstRunWizard(bool firstRun)
  */
 void MainWindow::applyStartupDestination()
 {
+    if (noConnect) {
+        qCInfo(WindowMainStartupAutoconnectLog) << "Startup destination suppressed (--no-connect)";
+        return;
+    }
+
     // An explicit command-line connect takes precedence over the startup destination.
     if (!connectTo.isEmpty()) {
         return;
@@ -934,11 +1001,28 @@ void MainWindow::actShow()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // workaround Qt bug where closeEvent gets called twice
-    if (bClosingDown) {
-        return;
+    switch (shutdownState) {
+        case ShutdownState::Accepted:
+            // A duplicate close for a shutdown that already went through (Qt delivers the event
+            // twice on some platforms). Accepting it again keeps the quit that is already under
+            // way; ignoring it would cancel it.
+            event->accept();
+            return;
+        case ShutdownState::Confirming:
+            // A second close request arrived while one of our own confirmations is up. Another
+            // program asking us to close - an installer replacing our files, for one - looks
+            // exactly like this, and accepting it would be destructive: close() hides this
+            // window, hides the dialog with it, and leaves the process running inside the nested
+            // loop that dialog opened. Nothing can reach that loop afterwards, so the process
+            // stays alive with no window and every later close request is accepted into the same
+            // dead end. Refuse this one and leave the question in front of the user; the shutdown
+            // that is already running finishes as soon as they answer it.
+            event->ignore();
+            return;
+        case ShutdownState::Idle:
+            break;
     }
-    bClosingDown = true;
+    shutdownState = ShutdownState::Confirming;
 
     if (cardUpdateProcess && cardUpdateProcess->state() != QProcess::NotRunning) {
         const QString runningFor = cardUpdateStatusBar ? cardUpdateStatusBar->statusText() : QString();
@@ -948,22 +1032,22 @@ void MainWindow::closeEvent(QCloseEvent *event)
                                     : tr("A card database update is still running: %1.\nQuitting now will cancel it.\n"
                                          "Are you sure you want to quit?")
                                           .arg(runningFor);
-        if (QMessageBox::question(this, tr("Are you sure?"), message, QMessageBox::Yes | QMessageBox::No,
-                                  QMessageBox::No) == QMessageBox::No) {
+        if (!QtUtils::confirm(this, tr("Are you sure?"), message, QMessageBox::No)) {
             event->ignore();
-            bClosingDown = false;
+            shutdownState = ShutdownState::Idle;
             return;
         }
     }
 
     if (!tabSupervisor->close()) {
         event->ignore();
-        bClosingDown = false;
+        shutdownState = ShutdownState::Idle;
         return;
     }
     tip->close();
 
     event->accept();
+    shutdownState = ShutdownState::Accepted;
     SettingsCache::instance().layouts().setMainWindowGeometry(saveGeometry());
     tabSupervisor->deleteLater();
 }
@@ -974,10 +1058,34 @@ bool MainWindow::closeForUpdate()
     // closeEvent() is blocked on a user prompt). close() would hit the re-entrancy guard and return
     // true without any shutdown having happened, so report faithfully instead: the caller must keep
     // the process alive until the user resolves whatever is blocking the close.
-    if (bClosingDown) {
+    if (shutdownState != ShutdownState::Idle) {
         return false;
     }
     return close();
+}
+
+void MainWindow::requestInstallerClose()
+{
+    // The same shutdown the in-app updater asks for: close the window, flush settings and let
+    // the tabs answer their own prompts. Never a forced quit - ending a process that has not
+    // agreed is the installer's separate force-close answer, not this one.
+    if (closeForUpdate()) {
+        QTimer::singleShot(0, qApp, [] { QCoreApplication::exit(0); });
+        return;
+    }
+    // A confirmation is already up, or a shutdown is in progress. Bring it forward: an
+    // installer prompt behind a hidden confirmation is the deadlock this request exists to
+    // break, and the user has to be able to answer it. showWindowIfHidden() also clears
+    // Qt::WindowMinimized, which raise() alone does not: a minimized window can keep the
+    // confirmation behind the installer.
+    showWindowIfHidden();
+    if (QWidget *modal = QApplication::activeModalWidget()) {
+        modal->raise();
+        modal->activateWindow();
+    }
+    raise();
+    activateWindow();
+    QApplication::alert(this, 0);
 }
 
 void MainWindow::changeEvent(QEvent *event)
@@ -1015,6 +1123,10 @@ void MainWindow::handleCockatriceLink(const QString &url)
 
 void MainWindow::attemptStartupAutoConnect()
 {
+    if (noConnect) {
+        qCInfo(WindowMainStartupAutoconnectLog) << "Auto-connect suppressed (--no-connect)";
+        return;
+    }
     if (startupAutoConnectAttempted || skipStartupAutoConnect) {
         return;
     }
@@ -1029,7 +1141,8 @@ void MainWindow::attemptStartupAutoConnect()
         qCInfo(WindowMainStartupAutoconnectLog) << "Attempting auto-connect...";
         DlgConnect dlg(this);
         connectionController->connectToServerDirect(dlg.getHost(), static_cast<unsigned int>(dlg.getPort()),
-                                                    dlg.getPlayerName(), dlg.getPassword());
+                                                    dlg.getPlayerName(), dlg.getPassword(), dlg.getStoredVerifier(),
+                                                    dlg.getSaveName(), dlg.getSavePassword());
     }
 }
 
@@ -1211,7 +1324,7 @@ void MainWindow::createCardUpdateProcess(bool background)
     QString binaryName;
     QDir dir = QDir(QApplication::applicationDirPath());
 
-#if defined(Q_OS_MAC)
+#if defined(Q_OS_MACOS)
     /*
      * bypass app translocation: quarantined application will be started from a temporary directory eg.
      * /private/var/folders/tk/qx76cyb50jn5dvj7rrgfscz40000gn/T/AppTranslocation/A0CBBD5A-9264-4106-8547-36B84DB161E2/d/oracle/
@@ -1253,7 +1366,7 @@ void MainWindow::createCardUpdateProcess(bool background)
                                          << dir.absoluteFilePath(binaryName);
         QMessageBox::warning(this, tr("Error"),
                              tr("Unable to run the card database updater: ") + dir.absoluteFilePath(binaryName));
-        exitCardDatabaseUpdate();
+        exitCardDatabaseUpdate(false);
         emit cardDatabaseUpdateFinished(false);
         return;
     }
@@ -1330,7 +1443,7 @@ void MainWindow::cardUpdateStandardError()
     }
 }
 
-void MainWindow::exitCardDatabaseUpdate()
+void MainWindow::exitCardDatabaseUpdate(bool doReload)
 {
     if (!cardUpdateProcess) {
         return;
@@ -1339,9 +1452,11 @@ void MainWindow::exitCardDatabaseUpdate()
     cardUpdateProcess = nullptr;
     statusBar()->clearMessage();
 
-    // This can be the first successful load of the session (e.g. the onboarding
-    // download), so it must own the set check for that load.
-    reloadCardDatabaseAndCheckSets();
+    if (doReload) {
+        // This can be the first successful load of the session (e.g. the onboarding
+        // download), so it must own the set check for that load.
+        reloadCardDatabaseAndCheckSets();
+    }
 }
 
 void MainWindow::reloadCardDatabaseAndCheckSets()
@@ -1387,7 +1502,7 @@ void MainWindow::cardUpdateError(QProcess::ProcessError err)
     }
 
     qCWarning(CardDatabaseUpdateLog) << "The card database updater exited with an error:" << error;
-    exitCardDatabaseUpdate();
+    exitCardDatabaseUpdate(false);
     QMessageBox::warning(this, tr("Error"), tr("The card database updater exited with an error:\n%1").arg(error));
     emit cardDatabaseUpdateFinished(false);
 }
@@ -1400,12 +1515,14 @@ void MainWindow::cardUpdateFinished(int exitCode, QProcess::ExitStatus exitStatu
     cardUpdateProgressOutput(); // drain any progress lines not yet parsed
 
     const bool success = (exitStatus == QProcess::NormalExit) && (exitCode == 0);
-    if (exitStatus == QProcess::NormalExit) {
+    if (success) {
         SettingsCache::instance().updates().setLastCardUpdateCheck(QDateTime::currentDateTime().date());
+    } else if (exitStatus == QProcess::NormalExit) {
+        statusBar()->showMessage(tr("Card database update cancelled."), 10000);
     }
     qCInfo(CardDatabaseUpdateLog) << "The card database updater finished with exit code" << exitCode << "exit status"
                                   << static_cast<int>(exitStatus) << "success:" << success;
-    exitCardDatabaseUpdate();
+    exitCardDatabaseUpdate(success);
     notifyCardUpdateFinishedFromTray(success);
     emit cardDatabaseUpdateFinished(success);
 }
@@ -1497,13 +1614,13 @@ void MainWindow::refreshShortcuts()
 void MainWindow::actOpenCustomFolder()
 {
     QString dir = SettingsCache::instance().paths().getCustomPicsPath();
-    QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+    QtUtils::openPathInFileManager(dir);
 }
 
 void MainWindow::actOpenCustomsetsFolder()
 {
     QString dir = SettingsCache::instance().getCustomCardDatabasePath();
-    QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+    QtUtils::openPathInFileManager(dir);
 }
 
 void MainWindow::actAddCustomSet()

@@ -1,6 +1,6 @@
 #include "visual_deck_display_options_widget.h"
 
-#include "../../pixel_map_generator.h"
+#include "../../theme_icon.h"
 #include "../deck_editor/deck_editor_deck_dock_widget.h"
 #include "../quick_settings/settings_button_widget.h"
 #include "../tabs/visual_deck_editor/tab_deck_editor_visual.h"
@@ -10,6 +10,7 @@
 #include <QAbstractItemModel>
 #include <QAbstractItemView>
 #include <QComboBox>
+#include <QEvent>
 #include <QFlags>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -25,9 +26,7 @@
 
 VisualDeckDisplayOptionsWidget::VisualDeckDisplayOptionsWidget(QWidget *parent) : QWidget(parent)
 {
-    groupAndSortLayout = new QHBoxLayout(this);
-    groupAndSortLayout->setContentsMargins(0, 0, 0, 0);
-    groupAndSortLayout->setSpacing(3);
+    groupAndSortLayout = QtUtils::makeLayout<QHBoxLayout>(this, 3);
     groupAndSortLayout->setAlignment(Qt::AlignLeft);
     this->setLayout(groupAndSortLayout);
 
@@ -66,7 +65,7 @@ VisualDeckDisplayOptionsWidget::VisualDeckDisplayOptionsWidget(QWidget *parent) 
     sortByLabel = new QLabel(this);
 
     sortCriteriaButton = new SettingsButtonWidget(this);
-    sortCriteriaButton->setButtonIcon(themePixmap(QStringLiteral("icons/sort_arrow_down")));
+    sortCriteriaButton->setButtonIcon(loadThemedIcon(QStringLiteral("icons/sort_arrow_down")));
 
     sortLabel = new QLabel(sortCriteriaButton);
     sortLabel->setWordWrap(true);
@@ -110,10 +109,31 @@ void VisualDeckDisplayOptionsWidget::retranslateUi()
     sortByLabel->setText(tr("Sort by:"));
     sortLabel->setText(tr("Click and drag to change the sort order within the groups"));
     sortCriteriaButton->setToolTip(tr("Configure how cards are sorted within their groups"));
-    displayTypeButton->setButtonText(tr("Toggle Layout: Overlap"));
-    displayTypeButton->setButtonIcon(themePixmap(QStringLiteral("icons/scales")));
+    updateDisplayTypeButton();
     displayTypeButton->setToolTip(
         tr("Change how cards are displayed within zones (i.e. overlapped or fully visible.)"));
+}
+
+void VisualDeckDisplayOptionsWidget::updateDisplayTypeButton()
+{
+    switch (currentDisplayType) {
+        case DisplayType::Flat:
+            displayTypeButton->setButtonText(tr("Toggle Layout: Flat"));
+            displayTypeButton->setButtonIcon(loadThemedIcon(QStringLiteral("icons/scroll"), IconTint::primary()));
+            break;
+        case DisplayType::Overlap:
+            displayTypeButton->setButtonText(tr("Toggle Layout: Overlap"));
+            displayTypeButton->setButtonIcon(loadThemedIcon(QStringLiteral("icons/scales"), IconTint::primary()));
+            break;
+    }
+}
+
+void VisualDeckDisplayOptionsWidget::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::LanguageChange) {
+        retranslateUi();
+    }
+    QWidget::changeEvent(event);
 }
 
 void VisualDeckDisplayOptionsWidget::onSortCriteriaChange()
@@ -132,17 +152,8 @@ void VisualDeckDisplayOptionsWidget::updateDisplayType()
     // Toggle the display type
     currentDisplayType = (currentDisplayType == DisplayType::Overlap) ? DisplayType::Flat : DisplayType::Overlap;
 
-    // Update UI and emit signal
-    switch (currentDisplayType) {
-        case DisplayType::Flat:
-            displayTypeButton->setButtonText(tr("Toggle Layout: Flat"));
-            displayTypeButton->setButtonIcon(themePixmap(QStringLiteral("icons/scroll")));
-            break;
-        case DisplayType::Overlap:
-            displayTypeButton->setButtonText(tr("Toggle Layout: Overlap"));
-            displayTypeButton->setButtonIcon(themePixmap(QStringLiteral("icons/scales")));
-            break;
-    }
+    // Update only the toggle button, not every string in the widget
+    updateDisplayTypeButton();
     emit displayTypeChanged(currentDisplayType);
 }
 

@@ -16,7 +16,6 @@
 #include <libcockatrice/network/client/abstract/abstract_client.h>
 #include <qtmetamacros.h>
 
-class QGridLayout;
 class QLabel;
 class CardInfoPictureArtCropWidget;
 class ExactCard;
@@ -33,6 +32,7 @@ class HomeWidget : public QWidget
 public:
     HomeWidget(QWidget *parent, TabSupervisor *tabSupervisor);
     void updateRandomCard();
+    void retranslateUi();
     static QPair<QColor, QColor> extractDominantColors(const QPixmap &pixmap);
 
 public slots:
@@ -45,7 +45,6 @@ public slots:
     void updateConnectButton(const ClientStatus status);
 
 private:
-    QGridLayout *layout;
     QTimer *cardChangeTimer;
     TabSupervisor *tabSupervisor;
     QPixmap background;
@@ -53,7 +52,15 @@ private:
     DeckList backgroundSourceDeck;
     QLabel *logoLabel = nullptr;
     QPair<QColor, QColor> gradientColors;
-    HomeStyledButton *connectButton;
+    HomeStyledButton *connectButton = nullptr;
+    HomeStyledButton *visualDeckEditorButton = nullptr;
+    HomeStyledButton *visualDeckStorageButton = nullptr;
+    HomeStyledButton *visualDatabaseDisplayButton = nullptr;
+    HomeStyledButton *edhrecButton = nullptr;
+    HomeStyledButton *archidektButton = nullptr;
+    HomeStyledButton *replayButton = nullptr;
+    HomeStyledButton *exitButton = nullptr;
+    ClientStatus connectionStatus = StatusDisconnected;
 
     void setRandomCard(ExactCard &newCard);
     void loadBackgroundSourceDeck();

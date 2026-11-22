@@ -1,7 +1,7 @@
 #include "visual_deck_storage_widget.h"
 
 #include "../../../client/settings/cache_settings.h"
-#include "../../pixel_map_generator.h"
+#include "../../theme_icon.h"
 #include "deck_preview/deck_preview_color_identity_filter_widget.h"
 #include "deck_preview/deck_preview_widget.h"
 #include "libcockatrice/card/database/card_database.h"
@@ -33,6 +33,7 @@
 #include <libcockatrice/settings/cards_display_settings.h>
 #include <libcockatrice/settings/paths_settings.h>
 #include <libcockatrice/settings/visual_deck_storage_settings.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 VisualDeckStorageWidget::VisualDeckStorageWidget(QWidget *parent) : QWidget(parent)
@@ -61,12 +62,12 @@ VisualDeckStorageWidget::VisualDeckStorageWidget(QWidget *parent) : QWidget(pare
     searchWidget = new VisualDeckStorageSearchWidget(this);
 
     refreshButton = new QToolButton(this);
-    refreshButton->setIcon(themePixmap(QStringLiteral("icons/reload")));
+    refreshButton->setIcon(loadThemedIcon(QStringLiteral("icons/reload")));
     refreshButton->setFixedSize(32, 32);
     connect(refreshButton, &QPushButton::clicked, this, &VisualDeckStorageWidget::refreshIfPossible);
 
     shareButton = new QToolButton(this);
-    shareButton->setIcon(themePixmap(QStringLiteral("icons/share")));
+    shareButton->setIcon(loadThemedIcon(QStringLiteral("icons/share"), AppColor::Informational));
     shareButton->setFixedSize(32, 32);
     shareButton->setVisible(false);
     connect(shareButton, &QPushButton::clicked, this, &VisualDeckStorageWidget::shareRequested);
@@ -98,10 +99,7 @@ VisualDeckStorageWidget::VisualDeckStorageWidget(QWidget *parent) : QWidget(pare
             &VisualDeckStorageWidget::updateSelectionAnimationEnabled);
 
     // deck area
-    scrollArea = new QScrollArea(this);
-    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollArea->setWidgetResizable(true);
+    scrollArea = QtUtils::makeScrollArea(this);
 
     // putting everything together
     layout->addWidget(searchAndSortContainer);
@@ -186,7 +184,9 @@ void VisualDeckStorageWidget::resizeEvent(QResizeEvent *event)
 
 void VisualDeckStorageWidget::retranslateUi()
 {
-    databaseLoadIndicator->setText(tr("Loading database ..."));
+    if (databaseLoadIndicator) {
+        databaseLoadIndicator->setText(tr("Loading database ..."));
+    }
 
     refreshButton->setToolTip(tr("Refresh loaded files"));
     shareButton->setToolTip(tr("Select decks to share"));
@@ -280,6 +280,14 @@ void VisualDeckStorageWidget::createRootFolderWidget()
 
     folderWidget =
         new VisualDeckStorageFolderDisplayWidget(this, this, QString(), false, quickSettingsWidget->getShowFolders());
+
+    // QScrollArea::setWidget() deletes the widget it currently holds. If that is still the
+    // database load indicator, take it back first so the label stays alive for retranslateUi().
+    if (databaseLoadIndicator && scrollArea->widget() == databaseLoadIndicator) {
+        scrollArea->takeWidget();
+        databaseLoadIndicator->setParent(this);
+        databaseLoadIndicator->setVisible(false);
+    }
 
     scrollArea->setWidget(folderWidget); // this automatically destroys the old folderWidget
     scrollArea->widget()->setMaximumWidth(scrollArea->viewport()->width());

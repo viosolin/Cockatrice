@@ -4,6 +4,7 @@
 #include <QByteArray>
 #include <QString>
 #include <QWizard>
+#include <memory>
 #include <qtmetamacros.h>
 #include <utility>
 
@@ -11,6 +12,7 @@ class QNetworkAccessManager;
 class OracleImporter;
 class QLocalServer;
 class QSettings;
+class TagDatabase;
 class QWidget;
 
 class OracleWizard : public QWizard
@@ -20,6 +22,19 @@ public:
     explicit OracleWizard(QWidget *parent = nullptr);
     void accept() override;
     void reject() override;
+    bool wasCancelled()
+    {
+        return cancelled;
+    }
+    /** @brief Records that the card database was written to disk, so a later cancel still counts as an update. */
+    void markDatabaseSaved()
+    {
+        databaseSaved = true;
+    }
+    bool hasSavedDatabase()
+    {
+        return databaseSaved;
+    }
     void enableButtons();
     void disableButtons();
     void retranslateUi();
@@ -55,6 +70,8 @@ public:
     OracleImporter *importer;
     QSettings *settings;
     QNetworkAccessManager *nam;
+    /** @brief Tag data loaded by the Tags page, consumed by the importer. */
+    std::shared_ptr<TagDatabase> tagDatabase;
     bool downloadedPlainXml = false;
     QByteArray xmlData;
     bool backgroundMode = false;
@@ -67,6 +84,8 @@ private:
     QByteArray tokensData;
     QString cardSourceUrl;
     QString cardSourceVersion;
+    bool cancelled = false;
+    bool databaseSaved = false;
 
     void migrateOracleSettings();
     /**

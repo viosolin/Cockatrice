@@ -37,7 +37,7 @@
 #include <server_protocolhandler.h>
 
 class Servatrice;
-class Servatrice_DatabaseInterface;
+class Server_DatabaseInterface;
 class DeckList;
 class ServerInfo_DeckStorage_Folder;
 class Command_AddToList;
@@ -73,6 +73,7 @@ class Command_AccountPassword;
 class Command_Activate;
 class Command_AddCardArtRule;
 class Command_AdjustMod;
+class Command_ClearBlacklistedBanners;
 class Command_ForceActivateUser;
 class Command_ForgotPasswordChallenge;
 class Command_ForgotPasswordRequest;
@@ -80,6 +81,7 @@ class Command_ForgotPasswordReset;
 class Command_GetAdminNotes;
 class Command_GetBanHistory;
 class Command_GetModeratorLastLogins;
+class Command_GetPrivateChatHistory;
 class Command_GetServerStats;
 class Command_GetUserAlts;
 class Command_GetUserSessions;
@@ -90,6 +92,7 @@ class Command_ListCardArtRules;
 class Command_Register;
 class Command_RemoveCardArtRule;
 class Command_RemoveUserAvatar;
+class Command_RemoveUserBanner;
 class Command_Report;
 class Command_ReportAddComment;
 class Command_ReportAssign;
@@ -103,6 +106,7 @@ class Command_ReportUserInfo;
 class Command_RequestPasswordSalt;
 class Command_ResetUserPassword;
 class Command_SetCardArtParams;
+class Command_SubmitPasswordVerifier;
 class Command_UpdateAdminNotes;
 class Command_ViewLogHistory;
 class Command_WarnUser;
@@ -122,8 +126,10 @@ signals:
 
 protected:
     void logDebugMessage(const QString &message) override;
+    [[nodiscard]] bool logsDebugMessages() const override;
     bool tooManyRegistrationAttempts(const QString &ipAddress);
     void processCommandContainer(const CommandContainer &cont) override;
+    bool acceptsCredentialFormat(bool passwordNeedsHash, const QString &password) const;
 
     virtual void writeToSocket(QByteArray &data) = 0;
     virtual void flushSocket() = 0;
@@ -133,24 +139,18 @@ protected:
     QMutex outputQueueMutex;
 
 private:
-    Servatrice_DatabaseInterface *sqlInterface;
-
     Response::ResponseCode cmdAddToList(const Command_AddToList &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdRemoveFromList(const Command_RemoveFromList &cmd, ResponseContainer &rc);
-    int getDeckPathId(int basePathId, QStringList path);
-    int getDeckPathId(const QString &path);
+    Response::ResponseCode cmdGetPrivateChatHistory(const Command_GetPrivateChatHistory &cmd, ResponseContainer &rc);
     bool deckListHelper(int folderId,
                         ServerInfo_DeckStorage_Folder *folder,
                         int userId,
                         bool inheritedPublic,
                         bool publicOnly);
-    int getDeckOwnerId(int deckId);
-    bool isDeckEffectivelyPublic(int deckId);
     Response::ResponseCode cmdDeckList(const Command_DeckList &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdDeckListOtherUser(const Command_DeckListOtherUser &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdDeckSetVisibility(const Command_DeckSetVisibility &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdDeckNewDir(const Command_DeckNewDir &cmd, ResponseContainer &rc);
-    void deckDelDirHelper(int basePathId);
     void sendServerMessage(const QString userName, const QString message);
     Response::ResponseCode cmdDeckDelDir(const Command_DeckDelDir &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdDeckDel(const Command_DeckDel &cmd, ResponseContainer &rc);
@@ -205,6 +205,7 @@ private:
     Response::ResponseCode cmdReportDetails(const Command_ReportDetails &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdReportAddComment(const Command_ReportAddComment &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdReplayDownloadByGameId(const Command_ReplayDownloadByGameId &cmd, ResponseContainer &rc);
+    Response::ResponseCode cmdSubmitPasswordVerifier(const Command_SubmitPasswordVerifier &cmd, ResponseContainer &rc);
     Response::ResponseCode
     processExtendedSessionCommand(int cmdType, const SessionCommand &cmd, ResponseContainer &rc) override;
     Response::ResponseCode
@@ -216,7 +217,6 @@ private:
 
     Response::ResponseCode cmdAccountEdit(const Command_AccountEdit &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdAccountImage(const Command_AccountImage &cmd, ResponseContainer &rc);
-    bool isCardNameAllowed(const QString &cardName, const QString &cardProviderId);
     Response::ResponseCode cmdSetCardArtParams(const Command_SetCardArtParams &cmd, ResponseContainer &);
     Response::ResponseCode cmdAddCardArtRule(const Command_AddCardArtRule &cmd, ResponseContainer &);
     Response::ResponseCode cmdRemoveCardArtRule(const Command_RemoveCardArtRule &cmd, ResponseContainer &);
@@ -233,6 +233,9 @@ private:
     Response::ResponseCode cmdGetModeratorLastLogins(const Command_GetModeratorLastLogins &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdResetUserPassword(const Command_ResetUserPassword &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdRemoveUserAvatar(const Command_RemoveUserAvatar &cmd, ResponseContainer &rc);
+    Response::ResponseCode cmdRemoveUserBanner(const Command_RemoveUserBanner &cmd, ResponseContainer &rc);
+    Response::ResponseCode cmdClearBlacklistedBanners(const Command_ClearBlacklistedBanners &cmd,
+                                                      ResponseContainer &rc);
 
     Response::ResponseCode cmdGetServerStats(const Command_GetServerStats &cmd, ResponseContainer &rc);
 
@@ -244,7 +247,7 @@ private:
 
 public:
     AbstractServerSocketInterface(Servatrice *_server,
-                                  Servatrice_DatabaseInterface *_databaseInterface,
+                                  Server_DatabaseInterface *_databaseInterface,
                                   QObject *parent = 0);
     ~AbstractServerSocketInterface()
     {
@@ -261,9 +264,7 @@ class TcpServerSocketInterface : public AbstractServerSocketInterface
 {
     Q_OBJECT
 public:
-    TcpServerSocketInterface(Servatrice *_server,
-                             Servatrice_DatabaseInterface *_databaseInterface,
-                             QObject *parent = 0);
+    TcpServerSocketInterface(Servatrice *_server, Server_DatabaseInterface *_databaseInterface, QObject *parent = 0);
     ~TcpServerSocketInterface();
 
     QHostAddress getPeerAddress() const
@@ -309,7 +310,7 @@ class WebsocketServerSocketInterface : public AbstractServerSocketInterface
     Q_OBJECT
 public:
     WebsocketServerSocketInterface(Servatrice *_server,
-                                   Servatrice_DatabaseInterface *_databaseInterface,
+                                   Server_DatabaseInterface *_databaseInterface,
                                    QObject *parent = nullptr);
     ~WebsocketServerSocketInterface();
 

@@ -1,5 +1,6 @@
 #include "resizable_panel.h"
 
+#include "../interface/theme_manager.h"
 #include "abstract_analytics_panel_widget.h"
 #include "libcockatrice/utility/qt_utils.h"
 
@@ -12,6 +13,7 @@
 #include <QDropEvent>
 #include <QEvent>
 #include <QFlags>
+#include <QFont>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QMimeData>
@@ -28,6 +30,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QtGlobal>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 ResizablePanel::ResizablePanel(const QString &_typeId, AbstractAnalyticsPanelWidget *analyticsPanel, QWidget *parent)
@@ -35,18 +38,14 @@ ResizablePanel::ResizablePanel(const QString &_typeId, AbstractAnalyticsPanelWid
 {
     setAcceptDrops(true);
 
-    auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
+    auto *mainLayout = QtUtils::makeLayout<QVBoxLayout>(this, 0);
 
     // Frame for selection highlight
     frame = new QFrame(this);
     frame->setFrameShape(QFrame::Box);
     frame->setLineWidth(2);
 
-    auto *frameLayout = new QVBoxLayout(frame);
-    frameLayout->setContentsMargins(0, 0, 0, 0);
-    frameLayout->setSpacing(0);
+    auto *frameLayout = QtUtils::makeLayout<QVBoxLayout>(frame, 0);
 
     // Add the analytics panel
     frameLayout->addWidget(analyticsPanel);
@@ -63,9 +62,7 @@ ResizablePanel::ResizablePanel(const QString &_typeId, AbstractAnalyticsPanelWid
 
     // Bottom bar with drag button and resize handle
     auto *bottomBar = new QWidget(frame);
-    auto *bottomLayout = new QHBoxLayout(bottomBar);
-    bottomLayout->setContentsMargins(0, 0, 0, 0);
-    bottomLayout->setSpacing(0);
+    auto *bottomLayout = QtUtils::makeLayout<QHBoxLayout>(bottomBar, 0);
 
     // Drag button on the left
     dragButton = new QPushButton("☰", bottomBar);
@@ -98,9 +95,17 @@ ResizablePanel::ResizablePanel(const QString &_typeId, AbstractAnalyticsPanelWid
 
     dragButton->setStyleSheet(QString("QPushButton { "
                                       "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2); "
-                                      "border: none; color: %3; font-size: 10px; }"
+                                      "border: none; color: %3; }"
                                       "QPushButton:hover { background: %4; }")
                                   .arg(mid.name(), dark.name(), placeholderText.name(), midLight.name()));
+    // Family comes from the InterfaceDefault theme role; the 10px size stays caller-side.
+    auto applyDragFont = [this]() {
+        QFont dragFont = themeManager->appFont(AppFont::InterfaceDefault);
+        dragFont.setPixelSize(10);
+        dragButton->setFont(dragFont);
+    };
+    applyDragFont();
+    connect(themeManager, &ThemeManager::fontsChanged, this, applyDragFont);
 
     resizeHandle->setStyleSheet(QString("QWidget { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
                                         "stop:0 %1, stop:1 %2); }")
@@ -175,7 +180,8 @@ bool ResizablePanel::eventFilter(QObject *obj, QEvent *event)
                 dragButton->setCursor(Qt::ClosedHandCursor);
             }
             return false;
-        } else if (event->type() == QEvent::MouseMove) {
+        }
+        if (event->type() == QEvent::MouseMove) {
             auto *mouseEvent = static_cast<QMouseEvent *>(event);
             if (mouseEvent->buttons() & Qt::LeftButton) {
                 QPoint currentPos = mouseEvent->globalPosition().toPoint();
@@ -202,7 +208,8 @@ bool ResizablePanel::eventFilter(QObject *obj, QEvent *event)
             resizeStartHeight = currentHeight;
             resizeHandle->grabMouse();
             return true;
-        } else if (event->type() == QEvent::MouseMove && isResizing) {
+        }
+        if (event->type() == QEvent::MouseMove && isResizing) {
             auto *mouseEvent = static_cast<QMouseEvent *>(event);
             int deltaY = mouseEvent->globalPosition().y() - resizeStartY;
             int newHeight = resizeStartHeight + deltaY;

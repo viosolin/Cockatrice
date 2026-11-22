@@ -1,12 +1,13 @@
 #include "dlg_report_user.h"
 
+#include "../interface/theme_manager.h"
+#include "../utility/report_utils.h"
 #include "abstract_client.h"
 #include "libcockatrice/protocol/pb/response.pb.h"
 
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFont>
-#include <QFontDatabase>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QLabel>
@@ -21,6 +22,7 @@
 #include <QVariant>
 #include <libcockatrice/protocol/pb/command_report.pb.h>
 #include <libcockatrice/protocol/pending_command.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <libcockatrice/utility/report_categories.h>
 #include <qnamespace.h>
 #include <string>
@@ -92,13 +94,8 @@ DlgReportUser::DlgReportUser(AbstractClient *_client,
     auto *chatLayout = new QVBoxLayout(chatGroup);
     chatLogEdit = new QTextEdit;
     chatLogEdit->setReadOnly(true);
-    QFont monoFont("monospace");
-    monoFont.setStyleHint(QFont::Monospace);
-    const int systemPointSize = QFontDatabase::systemFont(QFontDatabase::GeneralFont).pointSize();
-    if (systemPointSize > 0) {
-        monoFont.setPointSize(systemPointSize);
-    }
-    chatLogEdit->setFont(monoFont);
+    applyChatLogFont();
+    connect(themeManager, &ThemeManager::fontsChanged, this, &DlgReportUser::applyChatLogFont);
     if (!_autoChatLog.isEmpty()) {
         chatLogEdit->setPlainText(_autoChatLog);
     } else {
@@ -127,6 +124,11 @@ DlgReportUser::DlgReportUser(AbstractClient *_client,
     layout->addWidget(buttonBox);
 }
 
+void DlgReportUser::applyChatLogFont()
+{
+    chatLogEdit->setFont(report_utils::reportLogFont());
+}
+
 void DlgReportUser::actSubmit()
 {
     const QString description = descriptionEdit->toPlainText().trimmed();
@@ -135,12 +137,8 @@ void DlgReportUser::actSubmit()
         return;
     }
 
-    QMessageBox::StandardButton reply =
-        QMessageBox::question(this, tr("Confirm Report"),
-                              tr("Submit report against %1 for %2?").arg(reportedUser, categoryBox->currentText()),
-                              QMessageBox::Yes | QMessageBox::No);
-
-    if (reply != QMessageBox::Yes) {
+    if (!QtUtils::confirm(this, tr("Confirm Report"),
+                          tr("Submit report against %1 for %2?").arg(reportedUser, categoryBox->currentText()))) {
         return;
     }
 

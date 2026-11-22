@@ -5,6 +5,7 @@
 
 #include <QString>
 #include <QtGlobal>
+#include <libcockatrice/protocol/pb/response_report_user_info.pb.h>
 #include <qtmetamacros.h>
 
 class AbstractClient;
@@ -13,6 +14,7 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QTableWidget;
+class QTabWidget;
 class QTextEdit;
 class Response;
 class TabSupervisor;
@@ -20,7 +22,7 @@ class TabSupervisor;
 /**
  * Staff investigation tool. Lets moderators look up a user's account data,
  * alternate accounts, login sessions, and staff login activity, and offers
- * the password-reset and remove-avatar actions.
+ * the password-reset, remove-avatar, and remove-banner actions.
  */
 class TabModeration : public Tab
 {
@@ -36,6 +38,7 @@ public:
 
 private slots:
     void investigateUser();
+    void openAltsGraph();
     void userInfoResponse(const Response &response);
     void sessionsResponse(const Response &response);
     void altsResponse(const Response &response);
@@ -44,6 +47,8 @@ private slots:
     void resetPasswordResponse(const Response &response);
     void removeAvatar();
     void removeAvatarResponse(const Response &response);
+    void removeBanner();
+    void removeBannerResponse(const Response &response);
 
 private:
     void requestUserInfo(const QString &userName);
@@ -51,36 +56,42 @@ private:
     void requestAlts(const QString &userName);
     void requestModeratorLogins();
     void clearUserData();
+    void applyUserInfo();
+    void applyAltsCount();
     [[nodiscard]] QString formatEpoch(quint64 ts) const;
 
     AbstractClient *client;
     QString currentUser;
+    Response_ReportUserInfo cachedUserInfo;
+    bool cachedUserInfoValid = false;
+    int cachedAltsCount = -1;
 
     QLineEdit *searchEdit;
     QPushButton *investigateButton;
     QPushButton *resetPasswordButton;
     QPushButton *removeAvatarButton;
+    QPushButton *removeBannerButton;
 
     QGroupBox *userInfoGroup;
-    QLabel *userInfoNameLabel;
     QLabel *userInfoNameValue;
-    QLabel *userInfoRegisteredLabel;
-    QLabel *userInfoRegisteredValue;
-    QLabel *userInfoLastLoginLabel;
-    QLabel *userInfoLastLoginValue;
-    QLabel *userInfoStatusLabel;
     QLabel *userInfoStatusValue;
-    QLabel *userInfoCountsLabel;
-    QLabel *userInfoCountsValue;
+    QLabel *sublineLabel;
+    QGroupBox *cardReports;
+    QGroupBox *cardWarns;
+    QGroupBox *cardBans;
+    QGroupBox *altsCard;
+    QLabel *cardReportsValue;
+    QLabel *cardWarnsValue;
+    QLabel *cardBansValue;
+    QLabel *altsCountValue;
     QLabel *userInfoNotesLabel;
     QTextEdit *userInfoNotesEdit;
 
-    QGroupBox *altsGroup;
+    QTabWidget *sectionTabs;
     QTableWidget *altsTable;
-    QGroupBox *sessionsGroup;
     QTableWidget *sessionsTable;
-    QGroupBox *staffGroup;
     QTableWidget *staffTable;
+    QPushButton *openAltsButton;
     QPushButton *refreshStaffButton;
 };
 

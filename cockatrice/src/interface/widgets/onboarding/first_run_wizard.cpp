@@ -1,5 +1,6 @@
 #include "first_run_wizard.h"
 
+#include "../interface/theme_manager.h"
 #include "first_run_wizard_page.h"
 #include "pages/account_setup_page.h"
 #include "pages/card_database_setup_page.h"
@@ -17,6 +18,7 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QVBoxLayout>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 #include <utility>
 
@@ -31,10 +33,8 @@ FirstRunWizard::FirstRunWizard(QWidget *parent) : QDialog(parent)
     bannerHost = new BannerHost(this);
 
     titleLabel = new QLabel(this);
-    QFont titleFont = titleLabel->font();
-    titleFont.setPointSizeF(titleFont.pointSizeF() * 1.4);
-    titleFont.setBold(true);
-    titleLabel->setFont(titleFont);
+    applyInterfaceDefaultFont();
+    connect(themeManager, &ThemeManager::fontsChanged, this, &FirstRunWizard::applyInterfaceDefaultFont);
 
     subtitleLabel = new QLabel(this);
     subtitleLabel->setWordWrap(true);
@@ -51,8 +51,7 @@ FirstRunWizard::FirstRunWizard(QWidget *parent) : QDialog(parent)
     connect(skipButton, &QPushButton::clicked, this, &FirstRunWizard::skip);
     connect(nextButton, &QPushButton::clicked, this, &FirstRunWizard::goNext);
 
-    auto *headerLayout = new QVBoxLayout;
-    headerLayout->setContentsMargins(0, 0, 0, 0);
+    auto *headerLayout = QtUtils::makeLayout<QVBoxLayout>();
     headerLayout->addWidget(bannerHost);
     headerLayout->addSpacing(12);
     headerLayout->addWidget(titleLabel);
@@ -153,6 +152,16 @@ void FirstRunWizard::updateChrome()
     } else {
         nextButton->setText(isLast ? tr("Finish") : tr("Next"));
     }
+}
+
+void FirstRunWizard::applyInterfaceDefaultFont()
+{
+    // Family comes from the InterfaceDefault theme role; the *1.4 size
+    // multiplier and bold weight stay caller-side as before.
+    QFont titleFont = themeManager->appFont(AppFont::InterfaceDefault);
+    titleFont.setPointSizeF(titleFont.pointSizeF() * 1.4);
+    titleFont.setBold(true);
+    titleLabel->setFont(titleFont);
 }
 
 void FirstRunWizard::goNext()

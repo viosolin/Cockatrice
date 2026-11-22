@@ -21,6 +21,7 @@
 #define SERVATRICE_H
 
 #include "metrics_registry.h"
+#include "ratelimiter.h"
 #include "smtpclient.h"
 
 #include <QByteArray>
@@ -35,10 +36,6 @@
 #include <QSslCertificate>
 #include <QSslKey>
 #include <QString>
-
-// IWYU pragma: keep
-// Q_DECLARE_METATYPE below needs the complete type.
-#include <QSqlDatabase>
 #include <QTcpServer>
 #include <QWebSocketServer>
 #include <QtGlobal>
@@ -52,8 +49,6 @@
 class QObject;
 class QThread;
 class SessionEvent;
-
-Q_DECLARE_METATYPE(QSqlDatabase)
 
 class QTimer;
 class Servatrice;
@@ -72,7 +67,7 @@ private:
 public:
     Servatrice_GameServer(Servatrice *_server,
                           int _numberPools,
-                          const QSqlDatabase &_sqlDatabase,
+                          Server_DatabaseInterface *_databaseInterface,
                           QObject *parent = nullptr);
     ~Servatrice_GameServer() override;
 
@@ -91,7 +86,7 @@ private:
 public:
     Servatrice_WebsocketGameServer(Servatrice *_server,
                                    int _numberPools,
-                                   const QSqlDatabase &_sqlDatabase,
+                                   Server_DatabaseInterface *_databaseInterface,
                                    QObject *parent = nullptr);
     ~Servatrice_WebsocketGameServer() override;
 
@@ -154,13 +149,22 @@ public:
         AuthenticationSql,
         AuthenticationPassword
     };
+    enum AuthenticationStrictness
+    {
+        AuthenticationLegacy,
+        AuthenticationMixed,
+        AuthenticationStrict
+    };
 private slots:
     void statusUpdate();
+    void sweepLegacyBackups();
     void shutdownTimeout();
     void cleanupExpiredDeckShares();
 
 protected:
     void doSendIslMessage(const IslMessage &msg, int _serverId) override;
+    /** @brief Creates the database interface the server itself runs on; the shipped server uses MySQL. */
+    virtual Server_DatabaseInterface *createMainDatabaseInterface();
 
 private:
     enum DatabaseType
@@ -172,6 +176,7 @@ private:
     DatabaseType databaseType;
     QTimer *pingClock, *statusUpdateClock;
     QTimer *deckShareCleanupClock;
+    QTimer *legacyBackupSweepClock;
     Servatrice_GameServer *gameServer;
     Servatrice_WebsocketGameServer *websocketGameServer;
     Servatrice_IslServer *islServer;
@@ -181,7 +186,7 @@ private:
     QString dbPrefix;
     QMap<QString, bool> serverRequiredFeatureList;
     QString officialWarnings;
-    Servatrice_DatabaseInterface *servatriceDatabaseInterface;
+    Server_DatabaseInterface *servatriceDatabaseInterface;
     bool cleanupDatabaseForEmail(const QString &userName, EmailType type, const QString &token, qint64 rowId);
     int serverId;
     int uptime;
@@ -203,6 +208,8 @@ private:
     QDateTime reportStatsTimestamp;
     std::shared_ptr<const Response_ReportStats> reportStatsCache;
     static constexpr int reportStatsCacheTtlSeconds = 60;
+
+    RateLimiter rateLimiter;
 
     mutable QMutex serverListMutex;
     QList<ServerProperties> serverList;
@@ -248,6 +255,16 @@ public:
     {
         return serverRequiredFeatureList;
     }
+    bool requiresChallengeResponseAuth() const override
+    {
+        return getAuthenticationStrictness() == AuthenticationStrict;
+    }
+    /** @brief The port the game server listens on, or -1 when it is not listening. */
+    int getGameServerPort() const;
+    /** @brief Key sealing legacy password backups, or empty when they are disabled. */
+    QByteArray getLegacyBackupKey() const;
+    /** @brief Days a legacy password backup may go unused before it is purged. */
+    int getLegacyBackupTtlDays() const;
     QString getServerName() const;
     QString getLoginMessage() const override
     {
@@ -269,6 +286,7 @@ public:
     {
         return authenticationMethod;
     }
+    AuthenticationStrictness getAuthenticationStrictness() const;
     bool permitUnregisteredUsers() const override
     {
         return authenticationMethod != AuthenticationNone;
@@ -301,6 +319,8 @@ public:
     int getDeckShareMaxDecksPerShare() const;
     int getDeckShareMaxSharesPerDay() const;
     int getMaxUsersPerAddress() const;
+    /// Raw security/trusted_sources list; match addresses against it with isTrustedSource().
+    QString getTrustedSources() const;
     int getMessageCountingInterval() const override;
     int getMaxMessageCountPerInterval() const override;
     int getMaxMessageSizePerInterval() const override;
@@ -317,7 +337,7 @@ public:
     QList<AbstractServerSocketInterface *> getUsersWithAddressAsList(const QHostAddress &address) const;
     void incTxBytes(quint64 num);
     void incRxBytes(quint64 num);
-    void addDatabaseInterface(QThread *thread, Servatrice_DatabaseInterface *databaseInterface);
+    void addDatabaseInterface(QThread *thread, Server_DatabaseInterface *databaseInterface);
 
     // Metrics (see [metrics] section in servatrice.ini.example)
     MetricsRegistry &getMetricsRegistry()
@@ -361,6 +381,25 @@ public:
      * thread right after it starts.
      */
     void watchWorkerThread(QThread *thread);
+
+    RateLimiter *getRateLimiter()
+    {
+        return &rateLimiter;
+    }
+    bool recordFailedLogin(const QString &ipAddress, const QString &userName) override;
+    bool isLoginRateLimited(const QString &ipAddress, const QString &userName) override;
+    int loginRateLimitRemainingSeconds(const QString &ipAddress, const QString &userName) override;
+    void clearFailedLogins(const QString &ipAddress, const QString &userName) override;
+    bool recordRegistrationAttempt(const QString &ipAddress);
+    bool recordForgotPasswordAttempt(const QString &ipAddress);
+    /// True when the address is in security/trusted_sources and therefore exempt from per-address limits.
+    bool isRateLimitExempt(const QString &ipAddress) const;
+    int getMaxLoginAttemptsPerIp() const;
+    int getLoginAttemptWindowSeconds() const;
+    int getMaxRegistrationsPerIp() const;
+    int getRegistrationWindowSeconds() const;
+    int getMaxForgotPasswordRequestsPerIp() const;
+    int getForgotPasswordWindowSeconds() const;
 
     bool islConnectionExists(int _serverId) const;
     void addIslInterface(int _serverId, IslInterface *interface);

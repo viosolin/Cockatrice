@@ -19,7 +19,8 @@ libcockatrice_* \
 "oracle/src" \
 "servatrice/src" \
 "cmake/pch" \
-"tests")
+"tests" \
+"tools/installer-holder-probe")
 exclude=("libcockatrice_rng/libcockatrice/rng/sfmt/" \
 "libcockatrice_utility/libcockatrice/utility/peglib.h" \
 "oracle/src/lzma/" \
@@ -32,6 +33,7 @@ cmakefile="CMakeLists.txt"
 cmakedir="cmake/.*\\.cmake"
 cmakeinclude=("cmake/gtest-CMakeLists.txt.in")
 scripts="*.sh"
+scriptsrx="[^/]*\\.sh$"
 color="--"
 verbosity=0
 sep="----------"
@@ -253,7 +255,7 @@ if [[ $branch ]]; then
   if [[ $do_shell ]]; then
     shell_names=()
     for name in "${basenames[@]}"; do
-      filerx="(^|/)$scripts$"
+      filerx="(^|/)$scriptsrx"
       if [[ $name =~ $filerx ]]; then
         shell_names+=("$name")
       fi

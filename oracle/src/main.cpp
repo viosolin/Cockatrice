@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
     isSpoilersOnly = parser.isSet(spoilersOnlyOption);
     isBackgrounded = parser.isSet(backgroundOption);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     translationPath = qApp->applicationDirPath() + "/../Resources/translations";
 #elif defined(Q_OS_WIN)
     translationPath = qApp->applicationDirPath() + "/translations";
@@ -85,5 +85,8 @@ int main(int argc, char *argv[])
         QTimer::singleShot(0, &wizard, [&wizard]() { wizard.runInBackground(); });
     }
 
-    return app.exec();
+    const int execResult = app.exec();
+    // A cancel only counts when nothing was written yet: closing the wizard
+    // after the card database was already saved on disk is still an update.
+    return (wizard.wasCancelled() && !wizard.hasSavedDatabase()) ? 1 : execResult;
 }

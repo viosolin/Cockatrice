@@ -23,7 +23,10 @@ DlgEditPassword::DlgEditPassword(QWidget *parent) : QDialog(parent)
 
     auto &servers = SettingsCache::instance().servers();
     if (servers.getSavePassword()) {
-        oldPasswordEdit->setText(servers.getPassword());
+        const QString stored = servers.getPassword();
+        if (!stored.startsWith("$")) {
+            oldPasswordEdit->setText(stored);
+        }
     }
 
     oldPasswordLabel->setBuddy(oldPasswordEdit);
@@ -69,7 +72,8 @@ void DlgEditPassword::actOk()
     if (newPasswordEdit->text().length() < 8) {
         QMessageBox::critical(this, tr("Error"), tr("Your password is too short."));
         return;
-    } else if (newPasswordEdit->text() != newPasswordEdit2->text()) {
+    }
+    if (newPasswordEdit->text() != newPasswordEdit2->text()) {
         QMessageBox::warning(this, tr("Error"), tr("The new passwords don't match."));
         return;
     }

@@ -3,7 +3,7 @@
 #include "../../../client/settings/cache_settings.h"
 #include "../../../client/settings/shortcut_treeview.h"
 #include "../../../client/settings/shortcuts_settings.h"
-#include "../../pixel_map_generator.h"
+#include "../../theme_icon.h"
 #include "../interface/widgets/utility/custom_line_edit.h"
 #include "../interface/widgets/utility/sequence_edit.h"
 
@@ -18,6 +18,7 @@
 #include <QStringLiteral>
 #include <QVBoxLayout>
 #include <libcockatrice/settings/personal_settings.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 ShortcutSettingsPage::ShortcutSettingsPage()
@@ -57,8 +58,8 @@ ShortcutSettingsPage::ShortcutSettingsPage()
     btnResetAll = new QPushButton(this);
     btnClearAll = new QPushButton(this);
 
-    btnResetAll->setIcon(themePixmap(QStringLiteral("icons/update")));
-    btnClearAll->setIcon(themePixmap(QStringLiteral("icons/clearsearch")));
+    btnResetAll->setIcon(loadThemedIcon(QStringLiteral("icons/reload")));
+    btnClearAll->setIcon(loadThemedIcon(QStringLiteral("icons/clearsearch")));
 
     // layout
     auto *_editLayout = new QGridLayout;
@@ -112,16 +113,15 @@ void ShortcutSettingsPage::currentItemChanged(const QString &key)
 
 void ShortcutSettingsPage::resetShortcuts()
 {
-    if (QMessageBox::question(this, tr("Restore all default shortcuts"),
-                              tr("Do you really want to restore all default shortcuts?")) == QMessageBox::Yes) {
+    if (QtUtils::confirm(this, tr("Restore all default shortcuts"),
+                         tr("Do you really want to restore all default shortcuts?"))) {
         SettingsCache::instance().shortcuts().resetAllShortcuts();
     }
 }
 
 void ShortcutSettingsPage::clearShortcuts()
 {
-    if (QMessageBox::question(this, tr("Clear all default shortcuts"),
-                              tr("Do you really want to clear all shortcuts?")) == QMessageBox::Yes) {
+    if (QtUtils::confirm(this, tr("Clear all default shortcuts"), tr("Do you really want to clear all shortcuts?"))) {
         SettingsCache::instance().shortcuts().clearAllShortcuts();
     }
 }

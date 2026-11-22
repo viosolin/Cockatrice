@@ -1,17 +1,13 @@
 #include "view_zone_widget.h"
 
 #include "../../client/settings/cache_settings.h"
-#include "../../client/translation.h"
 #include "../../filters/syntax_help.h"
-#include "../../game/board/card_list.h"
-#include "../../game/player/player_actions.h"
-#include "../../game/player/player_logic.h"
-#include "../../game/zones/card_zone_logic.h"
-#include "../../game/zones/view_zone_logic.h"
 #include "../../interface/pixel_map_generator.h"
+#include "../../interface/theme_icon.h"
 #include "../card_dimensions.h"
 #include "../z_values.h"
 #include "libcockatrice/utility/macros.h"
+#include "libcockatrice/utility/qt_utils.h"
 #include "view_zone.h"
 
 #include <QAction>
@@ -44,7 +40,12 @@
 #include <QVariant>
 #include <QWidget>
 #include <QtGlobal>
-#include <libcockatrice/protocol/pb/command_shuffle.pb.h>
+#include <libcockatrice/game/board/card_list.h>
+#include <libcockatrice/game/player/player_actions.h>
+#include <libcockatrice/game/player/player_logic.h>
+#include <libcockatrice/game/translation.h>
+#include <libcockatrice/game/zones/card_zone_logic.h>
+#include <libcockatrice/game/zones/view_zone_logic.h>
 #include <libcockatrice/settings/cards_display_settings.h>
 #include <libcockatrice/settings/interface_settings.h>
 #include <qnamespace.h>
@@ -77,7 +78,7 @@ ZoneViewWidget::ZoneViewWidget(PlayerLogic *_player,
                                bool _writeableRevealZone,
                                const QList<const ServerInfo_Card *> &cardList,
                                bool _isReversed)
-    : QGraphicsWidget(0, Qt::Window), canBeShuffled(_origZone->getIsShufflable()), player(_player)
+    : QGraphicsWidget(nullptr, Qt::Window), canBeShuffled(_origZone->getIsShufflable()), player(_player)
 {
     setAcceptHoverEvents(true);
     setAttribute(Qt::WA_DeleteOnClose);
@@ -93,8 +94,10 @@ ZoneViewWidget::ZoneViewWidget(PlayerLogic *_player,
         searchEdit.setFocusPolicy(Qt::ClickFocus);
         searchEdit.setPlaceholderText(tr("Search by card name (or search expressions)"));
         searchEdit.setClearButtonEnabled(true);
-        searchEdit.addAction(loadColorAdjustedPixmap("theme:icons/search"), QLineEdit::LeadingPosition);
-        auto help = searchEdit.addAction(themePixmap(QStringLiteral("icons/info")), QLineEdit::TrailingPosition);
+        searchEdit.addAction(loadThemedIcon(QStringLiteral("icons/search"), IconTint::quiet()),
+                             QLineEdit::LeadingPosition);
+        auto help = searchEdit.addAction(loadThemedIcon(QStringLiteral("icons/info"), IconTint::quiet()),
+                                         QLineEdit::TrailingPosition);
 
         connect(help, &QAction::triggered, this, [this] { createSearchSyntaxHelpWindow(&searchEdit); });
 
@@ -177,9 +180,10 @@ ZoneViewWidget::ZoneViewWidget(PlayerLogic *_player,
 
     vbox->addItem(zoneHBox);
 
-    zone = new ZoneViewZone(new ZoneViewZoneLogic(player, _origZone, numberCards, _revealZone, _writeableRevealZone,
-                                                  _isReversed, zoneContainer),
-                            zoneContainer);
+    zone =
+        new ZoneViewZone(new ZoneViewZoneLogic(player, _origZone, numberCards, _revealZone, _writeableRevealZone,
+                                               _isReversed, &SettingsCache::instance().userInterface(), zoneContainer),
+                         zoneContainer);
     connect(zone, &ZoneViewZone::wheelEventReceived, scrollBarProxy, &ScrollableGraphicsProxyWidget::recieveWheelEvent);
 
     retranslateUi();
@@ -292,6 +296,7 @@ void ZoneViewWidget::retranslateUi()
 
     shuffleCheckBox.setText(tr("shuffle when closing"));
     pileViewCheckBox.setText(tr("pile view"));
+    zone->retranslateEdgeMarker();
 }
 
 void ZoneViewWidget::stopWindowDrag()
@@ -356,12 +361,8 @@ QRectF ZoneViewWidget::closeButtonRect(QWidget *styleWidget) const
 
 QGraphicsView *ZoneViewWidget::findDragView(QWidget *eventWidget) const
 {
-    QWidget *current = eventWidget;
-    while (current) {
-        if (auto *view = qobject_cast<QGraphicsView *>(current)) {
-            return view;
-        }
-        current = current->parentWidget();
+    if (auto *view = QtUtils::findParentOfType<QGraphicsView>(eventWidget, true)) {
+        return view;
     }
 
     if (scene() && !scene()->views().isEmpty()) {
@@ -569,11 +570,11 @@ void ZoneViewWidget::handleScrollBarChange(int value)
 void ZoneViewWidget::closeEvent(QCloseEvent *event)
 {
     stopWindowDrag();
-    disconnect(zone, &ZoneViewZone::closed, this, 0);
+    disconnect(zone, &ZoneViewZone::closed, this, nullptr);
     // manually call zone->close in order to remove it from the origZones views
     zone->close();
     if (shuffleCheckBox.isChecked()) {
-        player->getPlayerActions()->sendGameCommand(Command_Shuffle());
+        player->getPlayerActions()->actShuffle();
     }
     zoneDeleted();
     event->accept();

@@ -53,13 +53,10 @@ QString readString(QDataStream &in)
 // Stores a QHash<QString, QString> as a single pre-serialized blob. The reader keeps the
 // blob as-is and materializes the QHash<QString, QString> lazily on first query, which is
 // what removes the allocation storm from database load (see card_info.cpp /
-// printing_info.cpp).
-void writeHashBlob(QDataStream &out, const QHash<QString, QString> &h)
+// printing_info.cpp). Writing the already-serialized blob also keeps cache writes from
+// materializing every card's property hash.
+void writeBlob(QDataStream &out, const QByteArray &blob)
 {
-    QByteArray blob;
-    QDataStream blobOut(&blob, QIODevice::WriteOnly);
-    blobOut.setVersion(QDataStream::Qt_6_4);
-    blobOut << h;
     out << static_cast<quint32>(blob.size());
     out.writeRawData(blob.constData(), blob.size());
 }
@@ -119,18 +116,18 @@ QMap<QString, QString> readStringMap(QDataStream &in)
 
 // ---- CardRelation ----------------------------------------------------------
 
-void writeRelation(QDataStream &out, const CardRelation *rel)
+void writeRelation(QDataStream &out, const CardRelation &rel)
 {
-    writeString(out, rel->getName());
-    out << static_cast<quint32>(rel->getAttachType());
-    out << rel->getIsCreateAllExclusion();
-    out << rel->getIsVariable();
-    out << rel->getDefaultCount();
-    out << rel->getIsPersistent();
-    out << rel->getIsFaceDown();
+    writeString(out, rel.name);
+    out << static_cast<quint32>(rel.attachType);
+    out << rel.isCreateAllExclusion;
+    out << rel.isVariableCount;
+    out << rel.defaultCount;
+    out << rel.isPersistent;
+    out << rel.isFaceDown;
 }
 
-CardRelation *readRelation(QDataStream &in)
+CardRelation readRelation(QDataStream &in)
 {
     QString name = readString(in);
     quint32 attachType = 0;
@@ -145,8 +142,13 @@ CardRelation *readRelation(QDataStream &in)
     in >> defaultCount;
     in >> isPersistent;
     in >> isFaceDown;
-    return new CardRelation(name, static_cast<CardRelationType>(attachType), isExclusion, isVariable, defaultCount,
-                            isPersistent, isFaceDown);
+    return CardRelation{.name = name,
+                        .attachType = static_cast<CardRelationType>(attachType),
+                        .isCreateAllExclusion = isExclusion,
+                        .isVariableCount = isVariable,
+                        .defaultCount = defaultCount,
+                        .isPersistent = isPersistent,
+                        .isFaceDown = isFaceDown};
 }
 
 // ---- PrintingInfo ----------------------------------------------------------
@@ -156,7 +158,7 @@ CardRelation *readRelation(QDataStream &in)
 void writePrinting(QDataStream &out, const PrintingInfo &p)
 {
     writeString(out, p.getSet() ? p.getSet()->getShortName() : QString());
-    writeHashBlob(out, p.getPropertiesHash());
+    writeBlob(out, p.getPropertiesBlob());
 }
 
 PrintingInfo readPrinting(QDataStream &in, const SetNameMap &sets)
@@ -198,7 +200,7 @@ void writeCard(QDataStream &out, const CardInfoPtr &card)
     writeString(out, card->getName());
     writeString(out, card->getText());
     out << card->getIsToken();
-    writeHashBlob(out, card->getPropertiesHash());
+    writeBlob(out, card->getPropertiesBlob());
 
     CardInfo::UiAttributes ui = card->getUiAttributes();
     out << ui.cipt;
@@ -210,7 +212,7 @@ void writeCard(QDataStream &out, const CardInfoPtr &card)
     // per-printing alt-name scan entirely.
     writeString(out, card->getSimpleName());
     {
-        const QSet<QString> altNames = card->getAltNames();
+        const QSet<QString> &altNames = card->getAltNames();
         out << static_cast<quint32>(altNames.size());
         for (const QString &alt : altNames) {
             writeString(out, alt);
@@ -218,7 +220,7 @@ void writeCard(QDataStream &out, const CardInfoPtr &card)
     }
 
     // setsToPrintings
-    const SetToPrintingsMap sets = card->getSets();
+    const auto &sets = card->getSets();
     out << static_cast<quint32>(sets.size());
     for (auto it = sets.constBegin(); it != sets.constEnd(); ++it) {
         writeString(out, it.key());
@@ -229,16 +231,16 @@ void writeCard(QDataStream &out, const CardInfoPtr &card)
     }
 
     // related cards
-    const QList<CardRelation *> related = card->getRelatedCards();
+    const QList<CardRelation> related = card->getRelatedCards();
     out << static_cast<quint32>(related.size());
-    for (const CardRelation *rel : related) {
+    for (const CardRelation &rel : related) {
         writeRelation(out, rel);
     }
 
     // reverse-related cards (the reverseRelatedCards list, not the computed 2Me)
-    const QList<CardRelation *> reverse = card->getReverseRelatedCards();
+    const QList<CardRelation> reverse = card->getReverseRelatedCards();
     out << static_cast<quint32>(reverse.size());
-    for (const CardRelation *rel : reverse) {
+    for (const CardRelation &rel : reverse) {
         writeRelation(out, rel);
     }
 
@@ -296,7 +298,7 @@ CardInfoPtr readCard(QDataStream &in, const SetNameMap &sets)
         cardSets.insert(setName, printings);
     }
 
-    QList<CardRelation *> related;
+    QList<CardRelation> related;
     quint32 relatedCount = 0;
     in >> relatedCount;
     if (in.status() != QDataStream::Ok) {
@@ -307,7 +309,7 @@ CardInfoPtr readCard(QDataStream &in, const SetNameMap &sets)
         related.append(readRelation(in));
     }
 
-    QList<CardRelation *> reverse;
+    QList<CardRelation> reverse;
     quint32 reverseCount = 0;
     in >> reverseCount;
     if (in.status() != QDataStream::Ok) {

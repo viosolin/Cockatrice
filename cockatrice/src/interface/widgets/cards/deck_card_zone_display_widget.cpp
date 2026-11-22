@@ -29,6 +29,7 @@
 #include <QVariant>
 #include <QtGlobal>
 #include <libcockatrice/models/deck_list/deck_list_model.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 class CardSizeWidget;
@@ -68,6 +69,7 @@ DeckCardZoneDisplayWidget::DeckCardZoneDisplayWidget(QWidget *parent,
     updateZoneCardCount();
 
     connect(deckListModel, &QAbstractItemModel::rowsInserted, this, &DeckCardZoneDisplayWidget::onCategoryAddition);
+    connect(deckListModel, &QAbstractItemModel::layoutChanged, this, &DeckCardZoneDisplayWidget::displayCards);
     if (selectionModel) {
         connect(selectionModel, &QItemSelectionModel::selectionChanged, this,
                 &DeckCardZoneDisplayWidget::onSelectionChanged);
@@ -173,21 +175,16 @@ void DeckCardZoneDisplayWidget::displayCards()
 
     for (const QPersistentModelIndex &persistent : rows) {
         constructAppropriateWidget(persistent);
+        // Reuse existing widgets when a model sort moves their persistent rows.
+        // This preserves collapsed groups and card selection during live edits.
+        cardGroupLayout->insertWidget(persistent.row(), indexToWidgetMap.value(persistent));
     }
 }
 
 void DeckCardZoneDisplayWidget::refreshDisplayType(const DisplayType &_displayType)
 {
     displayType = _displayType;
-    QLayoutItem *item;
-    while ((item = cardGroupLayout->takeAt(0)) != nullptr) {
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        } else if (item->layout()) {
-            item->layout()->deleteLater();
-        }
-        delete item;
-    }
+    QtUtils::clearLayoutRec(cardGroupLayout);
 
     indexToWidgetMap.clear();
 

@@ -5,7 +5,7 @@
 #include "../../../filters/filter_builder.h"
 #include "../../../filters/filter_tree_model.h"
 #include "../../key_signals.h"
-#include "../../pixel_map_generator.h"
+#include "../../theme_icon.h"
 #include "../tabs/abstract_tab_deck_editor.h"
 #include "libcockatrice/filters/filter_card.h"
 
@@ -28,6 +28,7 @@
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QWidget>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 DeckEditorFilterDockWidget::DeckEditorFilterDockWidget(AbstractTabDeckEditor *parent)
@@ -63,11 +64,12 @@ void DeckEditorFilterDockWidget::createFiltersDock()
     connect(filterBuilder, &FilterBuilder::add, filterModel, &FilterTreeModel::addFilter);
 
     aClearFilterOne = new QAction(QString(), this);
-    aClearFilterOne->setIcon(themePixmap(QStringLiteral("icons/decrement")));
+    aClearFilterOne->setIcon(loadThemedIcon(QStringLiteral("icons/decrement"), AppColor::Negative, IconStyle::Sticker));
     connect(aClearFilterOne, &QAction::triggered, this, &DeckEditorFilterDockWidget::actClearFilterOne);
 
     aClearFilterAll = new QAction(QString(), this);
-    aClearFilterAll->setIcon(themePixmap(QStringLiteral("icons/clearsearch")));
+    aClearFilterAll->setIcon(
+        loadThemedIcon(QStringLiteral("icons/clearsearch"), AppColor::Negative, IconStyle::Sticker));
     connect(aClearFilterAll, &QAction::triggered, this, &DeckEditorFilterDockWidget::actClearFilterAll);
 
     auto *filterDelOne = new QToolButton();
@@ -80,9 +82,8 @@ void DeckEditorFilterDockWidget::createFiltersDock()
     filterDelAll->setDefaultAction(aClearFilterAll);
     filterDelAll->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
-    auto *filterLayout = new QGridLayout;
+    auto *filterLayout = QtUtils::makeLayout<QGridLayout>();
     filterLayout->setObjectName("filterLayout");
-    filterLayout->setContentsMargins(0, 0, 0, 0);
     filterLayout->addWidget(filterBuilder, 0, 0, 1, 3);
     filterLayout->addWidget(filterView, 1, 0, 1, 3);
     filterLayout->addWidget(filterDelOne, 2, 0, 1, 1);

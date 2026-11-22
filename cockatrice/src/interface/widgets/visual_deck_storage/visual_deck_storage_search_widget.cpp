@@ -1,7 +1,7 @@
 #include "visual_deck_storage_search_widget.h"
 
 #include "../../../filters/syntax_help.h"
-#include "../../pixel_map_generator.h"
+#include "../../theme_icon.h"
 
 #include <QAction>
 #include <QHBoxLayout>
@@ -9,6 +9,7 @@
 #include <QLineEdit>
 #include <QStringLiteral>
 #include <QTimer>
+#include <libcockatrice/utility/qt_utils.h>
 
 /**
  * @brief Constructs a search bar for filtering decks in the Visual Deck Storage.
@@ -20,16 +21,16 @@
  */
 VisualDeckStorageSearchWidget::VisualDeckStorageSearchWidget(QWidget *parent) : QWidget(parent)
 {
-    layout = new QHBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout = QtUtils::makeLayout<QHBoxLayout>(this);
     setLayout(layout);
 
     searchBar = new QLineEdit(this);
     searchBar->setPlaceholderText(tr("Search by filename (or search expression)"));
     searchBar->setClearButtonEnabled(true);
-    searchBar->addAction(loadColorAdjustedPixmap("theme:icons/search"), QLineEdit::LeadingPosition);
+    searchBar->addAction(loadThemedIcon(QStringLiteral("icons/search"), IconTint::quiet()), QLineEdit::LeadingPosition);
 
-    auto help = searchBar->addAction(themePixmap(QStringLiteral("icons/info")), QLineEdit::TrailingPosition);
+    auto help = searchBar->addAction(loadThemedIcon(QStringLiteral("icons/info"), IconTint::quiet()),
+                                     QLineEdit::TrailingPosition);
     connect(help, &QAction::triggered, this, [this] { createDeckSearchSyntaxHelpWindow(searchBar); });
 
     layout->addWidget(searchBar);

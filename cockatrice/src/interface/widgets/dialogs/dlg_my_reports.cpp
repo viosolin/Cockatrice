@@ -1,5 +1,6 @@
 #include "dlg_my_reports.h"
 
+#include "../interface/theme_manager.h"
 #include "../utility/report_utils.h"
 #include "abstract_client.h"
 #include "libcockatrice/protocol/pb/response.pb.h"
@@ -7,7 +8,6 @@
 
 #include <QAbstractItemView>
 #include <QFont>
-#include <QFontDatabase>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -70,13 +70,8 @@ DlgMyReports::DlgMyReports(AbstractClient *_client, QWidget *parent)
     auto *chatGroup = new QGroupBox(tr("Chat Log Context"));
     chatLogEdit = new QTextEdit;
     chatLogEdit->setReadOnly(true);
-    QFont monoFont("monospace");
-    monoFont.setStyleHint(QFont::Monospace);
-    const int systemPointSize = QFontDatabase::systemFont(QFontDatabase::GeneralFont).pointSize();
-    if (systemPointSize > 0) {
-        monoFont.setPointSize(systemPointSize);
-    }
-    chatLogEdit->setFont(monoFont);
+    applyChatLogFont();
+    connect(themeManager, &ThemeManager::fontsChanged, this, &DlgMyReports::applyChatLogFont);
     auto *chatLayout = new QVBoxLayout(chatGroup);
     chatLayout->setContentsMargins(4, 4, 4, 4);
     chatLayout->addWidget(chatLogEdit);
@@ -127,6 +122,11 @@ DlgMyReports::DlgMyReports(AbstractClient *_client, QWidget *parent)
 
     setActionsEnabled(false);
     refreshList();
+}
+
+void DlgMyReports::applyChatLogFont()
+{
+    chatLogEdit->setFont(report_utils::reportLogFont());
 }
 
 void DlgMyReports::refreshList()
@@ -230,7 +230,8 @@ void DlgMyReports::onSelectionChanged()
     connect(pend, &PendingCommand::finished, this, &DlgMyReports::reportDetailsResponse);
     client->sendCommand(pend);
 
-    QString status = table->item(row, COL_STATUS)->text();
+    // The cell text is the translated label; the raw status lives in UserRole.
+    const QString status = table->item(row, COL_STATUS)->data(Qt::UserRole).toString();
     bool canComment = (status == "open" || status == "assigned");
     commentButton->setEnabled(canComment);
     commentInput->setEnabled(canComment);

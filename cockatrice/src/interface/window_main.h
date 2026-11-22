@@ -46,7 +46,9 @@
 #include <qtmetamacros.h>
 
 class QAction;
+class QToolButton;
 class QWidget;
+class pqTestUtility;
 struct LocalGameOptions;
 
 inline Q_LOGGING_CATEGORY(WindowMainLog, "window_main");
@@ -103,6 +105,11 @@ private slots:
     void actUpdate();
     void actViewLog();
     void actOpenSettingsFolder();
+#ifdef WITH_GUI_TEST
+    void actRecord();
+    void actPlayRecording();
+#endif
+
     void actShow();
     void showWindowIfHidden();
     void onUrlChainFinished(bool connected);
@@ -149,15 +156,12 @@ private:
 
     void runFirstRunWizard(bool firstRun = false);
 
-    /** @brief Warns once when a non-portable install keeps its data paths inside the program directory. */
-    void warnAboutDataPathsInProgramDir();
-
     inline QString getCardUpdaterBinaryName()
     {
         return "oracle";
     }
     void createCardUpdateProcess(bool background = false);
-    void exitCardDatabaseUpdate();
+    void exitCardDatabaseUpdate(bool doReload);
     /**
      * @brief Reloads the card database on a worker thread and runs checkUnknownSets() once the finished
      *        snapshot has been swapped in.
@@ -181,11 +185,15 @@ private:
     QList<QMenu *> tabMenus;
     QMenu *cockatriceMenu, *dbMenu, *tabsMenu, *helpMenu, *trayIconMenu;
     QAction *aAbout, *aSettings, *aShow, *aExit;
+    QToolButton *settingsButton = nullptr;
     QAction *aConnect, *aDisconnect, *aRegister, *aForgotPassword, *aSinglePlayer, *aWatchReplay, *aFullScreen;
     QAction *aManageSets, *aEditTokens, *aOpenCustomFolder, *aOpenCustomsetsFolder, *aAddCustomSet,
         *aReloadCardDatabase;
     QAction *aTips, *aUpdate, *aCheckCardUpdates, *aCheckCardUpdatesBackground, *aFirstRunWizard, *aStatusBar,
         *aViewLog, *aOpenSettingsFolder;
+#ifdef WITH_GUI_TEST
+    QAction *aRecord, *aPlayRecording;
+#endif
 
     TabSupervisor *tabSupervisor;
     IntentUrlParser *urlParser;
@@ -195,10 +203,21 @@ private:
     LagMonitor lagMonitor;                        ///< watches the main thread for event loop stalls
     LatencyStatusWidget *latencyStatus = nullptr; ///< status bar widget with live round-trip stats and history graph
     bool bHasActivated, askedForDbUpdater;
-    bool bClosingDown = false; ///< guards closeEvent() against re-entrancy
+    /**
+     * How far a shutdown that was asked for has got. A close request that arrives while one is
+     * already asking the user something must not be accepted - see closeEvent().
+     */
+    enum class ShutdownState
+    {
+        Idle,       ///< no shutdown has been asked for
+        Confirming, ///< asking about a card database update, open games or an unsaved deck
+        Accepted,   ///< the close was accepted and the window is hiding
+    };
+    ShutdownState shutdownState = ShutdownState::Idle;
     bool skipStartupAutoConnect = false;
     bool startupAutoConnectAttempted = false;
     bool firstRunWizardActive = false;
+    bool noConnect = false; ///< --no-connect: skip every startup connection
     QProcess *cardUpdateProcess;
     QByteArray cardUpdateOutputBuffer;
     QByteArray cardUpdateErrorOutput;  ///< diagnostic output collected from the updater's stderr
@@ -210,6 +229,9 @@ private:
     GameReplay *replay;
     DlgTipOfTheDay *tip;
     QUrl connectTo;
+#ifdef WITH_GUI_TEST
+    pqTestUtility *testUtility;
+#endif
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
@@ -217,6 +239,16 @@ public:
     {
         connectTo = QUrl(QString("cockatrice://%1").arg(url));
     }
+    /**
+     * @brief Suppresses every startup connection: --connect, auto-connect and the
+     *        configured startup destination. Used by the GUI test harness so a
+     *        playback run never dials out.
+     */
+    void setNoConnect(bool value)
+    {
+        noConnect = value;
+    }
+
     // When set, the window's own startup connection (--connect or auto-connect
     // on first activation) is skipped. Used for activation launches: the intent
     // chain triggered by a cockatrice:// URL owns the connection, and letting
@@ -245,6 +277,24 @@ public:
      *        false if the close was vetoed by the user or is already in progress.
      */
     bool closeForUpdate();
+
+    /**
+     * @brief Closes this instance because the installer asked it to over its local socket.
+     *
+     * The request reaches an instance hidden in the notification area or sitting on its own
+     * confirmation, which is exactly where a WM_CLOSE from the installer does not. The close
+     * is still the ordinary one: a clean client exits, one with unsaved work raises the same
+     * confirmation the close button does, and a confirmation already up is brought to the
+     * front instead of being left behind the installer.
+     */
+    void requestInstallerClose();
+
+#ifdef WITH_GUI_TEST
+    pqTestUtility *getTestUtility() const
+    {
+        return testUtility;
+    }
+#endif
 
 protected:
     void closeEvent(QCloseEvent *event) override;

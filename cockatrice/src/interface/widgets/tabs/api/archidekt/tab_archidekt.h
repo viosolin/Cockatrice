@@ -8,8 +8,10 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QList>
+#include <QPointer>
 #include <QSet>
 #include <QString>
+#include <QUrl>
 #include <QVector>
 #include <qtmetamacros.h>
 
@@ -55,6 +57,7 @@ public:
      * connects signals and slots, and triggers an initial fetch of top decks.
      */
     explicit TabArchidekt(TabSupervisor *_tabSupervisor);
+    ~TabArchidekt() override;
 
     /**
      * @brief Update all UI text to reflect the current language or translation
@@ -190,6 +193,17 @@ protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
+    enum class RequestKind
+    {
+        Search,
+        NextPage,
+        Deck
+    };
+
+    void startRequest(QUrl url, RequestKind kind, int page = 1);
+    void cancelRequest();
+    void showRequestError(const QString &error);
+
     /**
      * @brief Initialize the main UI layout and toolbars
      *
@@ -236,7 +250,14 @@ private:
     int currentPage;                       ///< Current page number for infinite scroll
     bool isLoadingMore;                    ///< Flag to prevent multiple simultaneous page loads
     bool isListMode;
-    ArchidektApiResponseDeckListingsDisplayWidget *listingsWidget = nullptr;
+    QPointer<QNetworkReply> activeReply;
+    RequestKind requestKind = RequestKind::Search;
+    QUrl requestUrl;
+    QUrl nextPageUrl;
+    int requestedPage = 1;
+    QPointer<ArchidektApiResponseDeckListingsDisplayWidget> listingsWidget;
+    QLabel *requestStatusLabel;
+    QPushButton *retryButton;
 
     // ---------------------------------------------------------------------
     // Layout Containers
@@ -287,9 +308,11 @@ private:
 
     SettingsButtonWidget *formatButton; ///< Collapsible button for format filters
     QVector<QCheckBox *> formatChecks;  ///< Individual checkboxes for each format
+    QLabel *bracketLabel;               ///< Label for EDH bracket selection
     QComboBox *edhBracketCombo;         ///< Dropdown for EDH bracket selection
 
     SettingsButtonWidget *deckSizeButton; ///< Collapsible button for deck size filter
+    QLabel *cardsLabel;                   ///< Label for deck size selection
     QSpinBox *minDeckSizeSpin;            ///< Spinner to select minimum deck size
     QComboBox *minDeckSizeLogicCombo;     ///< Combo box for size comparison logic
 

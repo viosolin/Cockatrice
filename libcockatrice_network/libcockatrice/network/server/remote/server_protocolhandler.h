@@ -4,6 +4,8 @@
 #include "server.h"
 #include "server_abstractuserinterface.h"
 
+#include <QByteArray>
+#include <QDateTime>
 #include <QList>
 #include <QMap>
 #include <QObject>
@@ -30,6 +32,7 @@ class Command_ListRooms;
 class Command_JoinRoom;
 class Command_LeaveRoom;
 class Command_RoomSay;
+class Command_RoomChannelSay;
 class Command_CreateGame;
 class Command_JoinGame;
 
@@ -43,11 +46,31 @@ protected:
     Server_DatabaseInterface *databaseInterface;
     AuthenticationResult authState;
     bool usingRealPassword;
+    /**
+     * @brief True when the credentials were right but the account must choose a new password
+     *        before it may use the server. Only ping, the password change and disconnecting
+     *        are served while this is set.
+     */
+    bool passwordChangePending;
     bool acceptsUserListChanges;
     bool acceptsRoomListChanges;
     bool idleClientWarningSent;
+    QByteArray authNonce;
+    QString authNonceUser;
+    QDateTime authNonceCreated;
     virtual void logDebugMessage(const QString & /* message */)
     {
+    }
+    /**
+     * @brief Whether debug messages produced by this handler are actually written anywhere.
+     *
+     * Formatting a protocol message for the log is expensive, so callers only
+     * build the debug string when this returns true. The base handler has no
+     * log destination and therefore never needs one.
+     */
+    [[nodiscard]] virtual bool logsDebugMessages() const
+    {
+        return false;
     }
 
 private:
@@ -66,6 +89,8 @@ private:
     Response::ResponseCode cmdListUsers(const Command_ListUsers &cmd, ResponseContainer &rc);
     Response::ResponseCode cmdLeaveRoom(const Command_LeaveRoom &cmd, Server_Room *room, ResponseContainer &rc);
     Response::ResponseCode cmdRoomSay(const Command_RoomSay &cmd, Server_Room *room, ResponseContainer &rc);
+    Response::ResponseCode
+    cmdRoomChannelSay(const Command_RoomChannelSay &cmd, Server_Room *room, ResponseContainer &rc);
     Response::ResponseCode cmdCreateGame(const Command_CreateGame &cmd, Server_Room *room, ResponseContainer &rc);
     Response::ResponseCode cmdJoinGame(const Command_JoinGame &cmd, Server_Room *room, ResponseContainer &rc);
 
@@ -103,8 +128,8 @@ public slots:
     void prepareDestroy();
 
 public:
-    Server_ProtocolHandler(Server *_server, Server_DatabaseInterface *_databaseInterface, QObject *parent = 0);
-    ~Server_ProtocolHandler();
+    Server_ProtocolHandler(Server *_server, Server_DatabaseInterface *_databaseInterface, QObject *parent = nullptr);
+    ~Server_ProtocolHandler() override;
 
     bool getAcceptsUserListChanges() const
     {
@@ -121,17 +146,24 @@ public:
         return databaseInterface;
     }
 
-    int getLastCommandTime() const
+    /** @brief Store a fresh challenge nonce bound to @p userName for the next challenge-response login attempt. */
+    void setAuthNonce(const QByteArray &nonce, const QString &userName);
+    /** @brief True if nonce matches the pending one, was issued for @p userName, and is less than 60 seconds old. */
+    bool isAuthNonceValid(const QByteArray &nonce, const QString &userName) const;
+    /** @brief Invalidate the pending nonce (single-use). */
+    void clearAuthNonce();
+
+    int getLastCommandTime() const override
     {
         return timeRunning - lastDataReceived;
     }
-    bool addSaidMessageSize(int size);
+    bool addSaidMessageSize(int size) override;
     virtual void processCommandContainer(const CommandContainer &cont);
 
-    void sendProtocolItem(const Response &item);
-    void sendProtocolItem(const SessionEvent &item);
-    void sendProtocolItem(const GameEventContainer &item);
-    void sendProtocolItem(const RoomEvent &item);
+    void sendProtocolItem(const Response &item) override;
+    void sendProtocolItem(const SessionEvent &item) override;
+    void sendProtocolItem(const GameEventContainer &item) override;
+    void sendProtocolItem(const RoomEvent &item) override;
 };
 
 #endif

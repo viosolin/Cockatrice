@@ -1,5 +1,6 @@
 #include "user_list_widget.h"
 
+#include "../../../../client/crash/crash_reporter.h"
 #include "../../../../client/settings/cache_settings.h"
 #include "../../interface/pixel_map_generator.h"
 #include "../../interface/theme_manager.h"
@@ -13,10 +14,10 @@
 #include "user_list_painter.h"
 #include "user_list_proxy.h"
 
-#include <QAbstractAnimation>
 #include <QAbstractItemModel>
 #include <QApplication>
 #include <QByteArray>
+#include <QCollator>
 #include <QColor>
 #include <QContextMenuEvent>
 #include <QCursor>
@@ -41,7 +42,6 @@
 #include <QPalette>
 #include <QPoint>
 #include <QPointF>
-#include <QPropertyAnimation>
 #include <QRect>
 #include <QScreen>
 #include <QScrollBar>
@@ -57,7 +57,9 @@
 #include <QVariant>
 #include <QWidget>
 #include <QtGlobal>
+#include <libcockatrice/models/natural_sort_collator.h>
 #include <libcockatrice/settings/appearance_settings.h>
+#include <libcockatrice/utility/qt_utils.h>
 #include <qnamespace.h>
 
 class QPixmap;
@@ -273,6 +275,11 @@ void UserListTWI::setOnline(bool online)
  */
 bool UserListTWI::operator<(const QTreeWidgetItem &other) const
 {
+    // QCollator caches the locale data, unlike QString::localeAwareCompare,
+    // which rebuilds it for every pair. The tree sorts one list at a time, so a
+    // single shared, immutable collator is enough.
+    static const QCollator collator = NaturalSort::makeNaturalSortCollator();
+
     // Sort by online/offline
     if (data(0, UserListRoles::Online) != other.data(0, UserListRoles::Online)) {
         return data(0, UserListRoles::Online).toBool();
@@ -288,9 +295,9 @@ bool UserListTWI::operator<(const QTreeWidgetItem &other) const
     for (const auto &userLevelEntry : userLevelWithNoOtherPrefOrder) {
         if (lhsUserLevelFlags.testFlag(userLevelEntry) &&
             lhsUserLevelFlags.testFlag(userLevelEntry) == rhsUserLevelFlags.testFlag(userLevelEntry)) {
-            return QString::localeAwareCompare(data(2, Qt::UserRole).toString(),
-                                               other.data(2, Qt::UserRole).toString()) < 0;
-        } else if (lhsUserLevelFlags.testFlag(userLevelEntry) != rhsUserLevelFlags.testFlag(userLevelEntry)) {
+            return collator.compare(data(2, Qt::UserRole).toString(), other.data(2, Qt::UserRole).toString()) < 0;
+        }
+        if (lhsUserLevelFlags.testFlag(userLevelEntry) != rhsUserLevelFlags.testFlag(userLevelEntry)) {
             return lhsUserLevelFlags.testFlag(userLevelEntry) > rhsUserLevelFlags.testFlag(userLevelEntry);
         }
     }
@@ -314,7 +321,7 @@ bool UserListTWI::operator<(const QTreeWidgetItem &other) const
     }
 
     // Sort by name
-    return QString::localeAwareCompare(data(2, Qt::UserRole).toString(), other.data(2, Qt::UserRole).toString()) < 0;
+    return collator.compare(data(2, Qt::UserRole).toString(), other.data(2, Qt::UserRole).toString()) < 0;
 }
 
 UserListWidget::UserListWidget(TabSupervisor *_tabSupervisor,
@@ -514,6 +521,19 @@ UserListWidget::UserListWidget(TabSupervisor *_tabSupervisor,
             userTree->viewport()->update();
             userTree->update();
         });
+        // Divider headers store their font on the item, so re-apply the role
+        // family here; the painter reads the role live and needs only the
+        // repaint below.
+        connect(themeManager, &ThemeManager::fontsChanged, this, [this] {
+            QFont dividerFont = themeManager->appFont(AppFont::InterfaceDefault);
+            dividerFont.setBold(true);
+            for (auto it = sectionItems.constBegin(); it != sectionItems.constEnd(); ++it) {
+                it.value()->setFont(0, dividerFont);
+                it.value()->setSizeHint(0, QSize(0, QFontMetrics(dividerFont).height() + 16));
+            }
+            userTree->viewport()->update();
+            userTree->update();
+        });
     }
 
     QVBoxLayout *vbox = new QVBoxLayout;
@@ -612,7 +632,14 @@ void UserListWidget::bind(UserListManager *mgr)
     connect(manager, &UserListManager::addedToIgnoreList, this, refreshCurrentPopup);
     connect(manager, &UserListManager::removedFromIgnoreList, this, refreshIfPopupOpen);
     connect(manager, &UserListManager::userJoinedOnline, this, refreshCurrentPopup);
-    connect(manager, &UserListManager::userLeftOnline, this, refreshIfPopupOpen);
+    connect(manager, &UserListManager::userLeftOnline, this, [this, refreshIfPopupOpen](const QString &name) {
+        // The online row may already have been removed; the pinned popup must
+        // still invalidate its games request and display the offline state.
+        if (userInfoPopup && userInfoPopup->getCurrentUser() == name) {
+            userInfoPopup->setOnline(false);
+        }
+        refreshIfPopupOpen(name);
+    });
 
     rebuild();
 }
@@ -895,11 +922,7 @@ void UserListWidget::showPopupForUser(UserListTWI *item)
         return;
     }
 
-    auto *fade = new QPropertyAnimation(userInfoPopup, "windowOpacity", userInfoPopup);
-    fade->setDuration(120);
-    fade->setStartValue(0.0);
-    fade->setEndValue(1.0);
-    fade->start(QAbstractAnimation::DeleteWhenStopped);
+    QtUtils::fadeWindow(userInfoPopup, 0.0, 1.0, 120);
 }
 
 void UserListWidget::positionPopup(UserListTWI *item)
@@ -976,12 +999,7 @@ void UserListWidget::hidePopup(bool immediate)
     }
 
     // Fade out
-    auto *fade = new QPropertyAnimation(userInfoPopup, "windowOpacity", userInfoPopup);
-    fade->setDuration(100);
-    fade->setStartValue(userInfoPopup->windowOpacity());
-    fade->setEndValue(0.0);
-    connect(fade, &QPropertyAnimation::finished, userInfoPopup, &QWidget::hide);
-    fade->start(QAbstractAnimation::DeleteWhenStopped);
+    QtUtils::fadeWindow(userInfoPopup, userInfoPopup->windowOpacity(), 0.0, 100, true);
 }
 
 bool UserListWidget::isPressInsideListUi(const QWidget *widget) const
@@ -1205,6 +1223,7 @@ void UserListWidget::processUserInfo(Section section, const ServerInfo_User &use
 
 bool UserListWidget::deleteUser(const QString &userName)
 {
+    CrashReporter::addBreadcrumb("users", "user list row removed");
     if (sectioned) {
         // The user may own several rows (one per section). Drop them all.
         bool removed = false;
@@ -1496,7 +1515,7 @@ QTreeWidgetItem *UserListWidget::createSectionItem(Section section)
     // They act as collapsible section headers once they have focus.
     divider->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 
-    QFont font = userTree->font();
+    QFont font = themeManager->appFont(AppFont::InterfaceDefault);
     font.setBold(true);
     divider->setFont(0, font);
     // A little taller than a plain text row so the header reads as a section
