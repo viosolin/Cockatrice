@@ -60,8 +60,10 @@ MessageLogWidget::getFromStr(CardZoneLogic *zone, QString cardName, int position
     if (zoneName == ZoneNames::TABLE) {
         fromStr = tr(" from play");
     } else if (zoneName == ZoneNames::GRAVE) {
+        soundEngine->playSound("put_in_graveyard");
         fromStr = tr(" from their graveyard");
     } else if (zoneName == ZoneNames::EXILE) {
+        soundEngine->playSound("exile_card");
         fromStr = tr(" from exile");
     } else if (zoneName == ZoneNames::HAND) {
         fromStr = tr(" from their hand");
@@ -338,12 +340,14 @@ void MessageLogWidget::logMoveCard(PlayerLogic *player,
             finalStr = tr("%1 puts %2 into play%3.");
         }
     } else if (targetZoneName == ZoneNames::GRAVE) {
+        soundEngine->playSound("put_in_graveyard");
         if (card->getFaceDown()) {
             finalStr = tr("%1 puts %2%3 into their graveyard face down.");
         } else {
             finalStr = tr("%1 puts %2%3 into their graveyard.");
         }
     } else if (targetZoneName == ZoneNames::EXILE) {
+        soundEngine->playSound("exile_card");
         if (card->getFaceDown()) {
             finalStr = tr("%1 exiles %2%3 face down.");
         } else {
