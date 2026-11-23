@@ -103,6 +103,9 @@ endif()
 # A project name is needed for CPack
 # Version can be overriden by git tags, see cmake/getversion.cmake
 project("Cockatrice" VERSION 3.2.0)
+if(MSVC)
+  add_compile_options(/utf-8)
+endif()
 
 # Set release name if not provided via ENV/CMake var
 if(NOT DEFINED GIT_TAG_RELEASENAME)

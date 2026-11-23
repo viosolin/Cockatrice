@@ -66,17 +66,11 @@ MessageLogWidget::getFromStr(CardZoneLogic *zone, QString cardName, int position
     if (zoneName == ZoneNames::TABLE) {
         fromStr = tr("from play");
     } else if (zoneName == ZoneNames::GRAVE) {
-<<<<<<< HEAD
         soundEngine->playSound("put_in_graveyard");
         fromStr = tr(" from their graveyard");
     } else if (zoneName == ZoneNames::EXILE) {
         soundEngine->playSound("exile_card");
         fromStr = tr(" from exile");
-=======
-        fromStr = tr("from their graveyard");
-    } else if (zoneName == ZoneNames::EXILE) {
-        fromStr = tr("from exile");
->>>>>>> 7c85eed4fddb402eb05507d005e916c984667b1c
     } else if (zoneName == ZoneNames::HAND) {
         fromStr = tr("from their hand");
     } else if (zoneName == ZoneNames::DECK) {
