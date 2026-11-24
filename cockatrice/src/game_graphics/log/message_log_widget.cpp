@@ -726,6 +726,12 @@ void MessageLogWidget::logSetCardCounter(PlayerLogic *player, QString cardName, 
 void MessageLogWidget::logSetCounter(PlayerLogic *player, QString counterName, int value, int oldValue)
 {
     if (counterName == "life") {
+        if (value > oldValue) {
+            soundEngine->playSound("life_increase");
+        } else if (value < oldValue) {
+
+            soundEngine->playSound("life_decrease");
+        }
         soundEngine->playSound("life_change");
     }
 
