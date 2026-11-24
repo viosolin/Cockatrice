@@ -147,7 +147,7 @@ void SoundEngine::themeChangedSlot()
         "end_combat", "main_2", "end_step",
         // Game Actions
         "draw_card", "play_card", "tap_card", "untap_card", "shuffle", "roll_dice",
-        "life_change", "flip_card", "create_token", "put_in_graveyard", "exile_card", "life_increase","life_decrease",
+        "life_change", "flip_card", "create_token", "put_in_graveyard", "exile_card", "life_increase","life_decrease", "from_sideboard",
         // Player
         "player_join", "player_leave", "player_disconnect", "player_reconnect", "player_concede",
         // Spectator

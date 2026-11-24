@@ -113,6 +113,7 @@ MessageLogWidget::getFromStr(CardZoneLogic *zone, QString cardName, int position
         }
     } else if (zoneName == ZoneNames::SIDEBOARD) {
         fromStr = tr("from sideboard");
+        soundEngine->playSound("from_sideboard");
     } else if (zoneName == ZoneNames::STACK) {
         fromStr = tr("from the stack");
     } else {
